@@ -6,9 +6,10 @@ import {
     description,
 } from '@golemcloud/golem-ts-sdk';
 
-import { UserConnectionType } from '../common/types';
+import { UserConnectionType, Timestamp } from '../common/types';
 import { Query, optTextExactMatches, textExactMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
+import { getCurrentTimestamp } from '../common/utils';
 import { pollForUpdates } from '../common/poll';
 import { Post, PostAgent, matchesPost, fetchPostsByIds } from '../post/index';
 
@@ -18,15 +19,15 @@ export interface PostRef {
     postId: string;
     createdBy: string;
     createdByConnectionType: UserConnectionType | null;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface UserTimeline {
     userId: string;
     posts: PostRef[];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface UserTimelineUpdates {
@@ -46,7 +47,7 @@ export class UserTimelineAgent extends BaseAgent {
 
     private getState(): UserTimeline {
         if (this.state === null) {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             this.state = {
                 userId: this._id,
                 posts: [],
@@ -65,12 +66,12 @@ export class UserTimelineAgent extends BaseAgent {
 
     @prompt("Get updates")
     @description("Returns timeline updates since a given time")
-    async getUpdates(updatesSince: number): Promise<UserTimelineUpdates | null> {
+    async getUpdates(updatesSince: Timestamp): Promise<UserTimelineUpdates | null> {
         if (this.state !== null) {
-            console.log(`get updates - updates since: ${updatesSince.toString()}`);
-            const sinceMs = updatesSince;
+            console.log(`get updates - updates since: ${updatesSince.timestamp}`);
+            const since = updatesSince;
 
-            const updates = this.state.posts.filter(p => p.updatedAt > sinceMs);
+            const updates = this.state.posts.filter(p => p.updatedAt.timestamp > since.timestamp);
             return {
                 userId: this.state.userId,
                 posts: updates
@@ -90,13 +91,13 @@ export class UserTimelineAgent extends BaseAgent {
         state.posts = state.posts.filter(p => !ids.has(p.postId));
         state.posts.push(...posts);
 
-        state.posts.sort((a, b) => b.updatedAt - a.updatedAt);
+        state.posts.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
 
         if (state.posts.length > POSTS_MAX_COUNT) {
             state.posts = state.posts.slice(0, POSTS_MAX_COUNT);
         }
 
-        state.updatedAt = Date.now();
+        state.updatedAt = getCurrentTimestamp();
         return Result.ok(null);
     }
 
@@ -187,10 +188,10 @@ export class UserTimelineViewAgent extends BaseAgent {
 
     @prompt("Get posts updates view")
     @description("Returns updated fetched timeline posts")
-    async getPostsUpdatesView(userId: string, updatesSince: number): Promise<Post[] | null> {
+    async getPostsUpdatesView(userId: string, updatesSince: Timestamp): Promise<Post[] | null> {
         const timelineUpdates = await UserTimelineAgent.get(userId).getUpdates(updatesSince);
 
-        console.log(`get posts updates view - user id: ${userId}, updates since: ${updatesSince.toString()}`);
+        console.log(`get posts updates view - user id: ${userId}, updates since: ${updatesSince.timestamp}`);
 
         if (timelineUpdates !== null) {
             const updatedPostRefs = timelineUpdates.posts;
@@ -217,7 +218,7 @@ export class UserTimelineUpdatesAgent extends BaseAgent {
     @description("Polls and retrieves timeline post updates for a user")
     async getPostsUpdates(
         userId: string,
-        updatesSince: number | null,
+        updatesSince: Timestamp | null,
         iterWaitTime: number | null,
         maxWaitTime: number | null
     ): Promise<PostRef[] | null> {

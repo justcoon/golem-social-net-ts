@@ -9,16 +9,16 @@ import {
     getSelfMetadata
 } from '@golemcloud/golem-ts-sdk';
 
-import { getOppositeConnectionType, UserConnectionType } from '../common/types';
+import { getOppositeConnectionType, UserConnectionType, Timestamp } from '../common/types';
 import { serialize, deserialize } from '../common/snapshot';
 import { Query, optTextMatches, textExactMatches } from '../common/query';
-import { arrayChunks } from '../common/utils';
+import { arrayChunks, getCurrentTimestamp } from '../common/utils';
 
 export interface ConnectedUser {
     userId: string;
     connectionTypes: UserConnectionType[];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface User {
@@ -26,8 +26,8 @@ export interface User {
     name: string | null;
     email: string | null;
     connectedUsers: [string, ConnectedUser][];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 @agent()
@@ -42,7 +42,7 @@ export class UserAgent extends BaseAgent {
 
     private getState(): User {
         if (this.state === null) {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             this.state = {
                 userId: this._id,
                 name: null,
@@ -67,7 +67,7 @@ export class UserAgent extends BaseAgent {
         console.log(`set name: ${name ?? "N/A"}`);
         const state = this.getState();
         state.name = name;
-        state.updatedAt = Date.now();
+        state.updatedAt = getCurrentTimestamp();
         return Result.ok(null);
     }
 
@@ -83,7 +83,7 @@ export class UserAgent extends BaseAgent {
         }
         const state = this.getState();
         state.email = email;
-        state.updatedAt = Date.now();
+        state.updatedAt = getCurrentTimestamp();
         return Result.ok(null);
     }
 
@@ -103,7 +103,7 @@ export class UserAgent extends BaseAgent {
 
         if (shouldConnect) {
             console.log(`connect user - id: ${userId}, type: ${connectionType}`);
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             if (existingConnection) {
                 existingConnection.connectionTypes.push(connectionType);
                 existingConnection.updatedAt = now;
@@ -139,7 +139,7 @@ export class UserAgent extends BaseAgent {
 
         if (shouldDisconnect) {
             console.log(`disconnect user - id: ${userId}, type: ${connectionType}`);
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             if (existingConnection!.connectionTypes.length === 1) {
                 state.connectedUsers.splice(existingIdx, 1);
             } else {

@@ -7,10 +7,10 @@ import {
 } from '@golemcloud/golem-ts-sdk';
 import { v4 as uuidv4 } from 'uuid';
 
-import { LikeType } from '../common/types';
+import { LikeType, Timestamp } from '../common/types';
 import { Query, textExactMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
-import { arrayChunks } from '../common/utils';
+import { arrayChunks, getCurrentTimestamp } from '../common/utils';
 import { UserAgent } from '../user/index';
 import { PostRef, UserTimelineAgent } from '../user_timeline/index';
 
@@ -22,8 +22,8 @@ export interface Comment {
     content: string;
     likes: [string, LikeType][];
     createdBy: string;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface Post {
@@ -32,8 +32,8 @@ export interface Post {
     createdBy: string;
     likes: [string, LikeType][];
     comments: [string, Comment][];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export function matchesPost(post: Post, query: Query): boolean {
@@ -68,15 +68,15 @@ export function matchesPost(post: Post, query: Query): boolean {
 
 export interface PostUpdate {
     postId: string;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface PostUpdates {
     userId: string;
     updates: PostUpdate[];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 @agent()
@@ -91,7 +91,7 @@ export class TimelinesUpdaterAgent extends BaseAgent {
 
     private getState(): PostUpdates {
         if (this.state === null) {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             this.state = {
                 userId: this._id,
                 updates: [],
@@ -111,7 +111,7 @@ export class TimelinesUpdaterAgent extends BaseAgent {
         // Add or update the queued update
         state.updates = state.updates.filter(u => u.postId !== update.postId);
         state.updates.push(update);
-        state.updatedAt = Date.now();
+        state.updatedAt = getCurrentTimestamp();
 
         if (processImmediately) {
             await this.executePostsUpdates();
@@ -136,7 +136,7 @@ export class TimelinesUpdaterAgent extends BaseAgent {
         if (user) {
             const updates = [...state.updates];
             state.updates = [];
-            state.updatedAt = Date.now();
+            state.updatedAt = getCurrentTimestamp();
 
             const connectedUsers = user.connectedUsers;
             const postRefs: PostRef[] = updates.map(u => ({
@@ -195,7 +195,7 @@ export class PostAgent extends BaseAgent {
 
     private getState(): Post {
         if (this.state === null) {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             this.state = {
                 postId: this._id,
                 content: "",
@@ -249,7 +249,7 @@ export class PostAgent extends BaseAgent {
         if (state) {
             state.likes = state.likes.filter(l => l[0] !== userId);
             state.likes.push([userId, likeType]);
-            state.updatedAt = Date.now();
+            state.updatedAt = getCurrentTimestamp();
         }
 
         return Result.ok(null);
@@ -269,7 +269,7 @@ export class PostAgent extends BaseAgent {
         state.likes = state.likes.filter(l => l[0] !== userId);
 
         if (state && state.likes.length !== initialLength) {
-            state.updatedAt = Date.now();
+            state.updatedAt = getCurrentTimestamp();
             return Result.ok(null);
         } else {
             return Result.err("Like not found");
@@ -290,7 +290,7 @@ export class PostAgent extends BaseAgent {
             return Result.err("Max comments limit reached");
         }
 
-        const now = Date.now();
+        const now = getCurrentTimestamp();
         const cid = uuidv4();
 
         state.comments.push([cid, {
@@ -321,7 +321,7 @@ export class PostAgent extends BaseAgent {
         state.comments = state.comments.filter(c => c[0] !== commentId && c[1].parentCommentId !== commentId);
 
         if (state.comments.length !== initialLength) {
-            state.updatedAt = Date.now();
+            state.updatedAt = getCurrentTimestamp();
             return Result.ok(null);
         } else {
             return Result.err("Comment not found");
@@ -339,8 +339,8 @@ export class PostAgent extends BaseAgent {
             const comment = commentTuple[1];
             comment.likes = comment.likes.filter(l => l[0] !== userId);
             comment.likes.push([userId, likeType]);
-            comment.updatedAt = Date.now(); // Update comment's own timestamp
-            state.updatedAt = Date.now(); // Update post's timestamp
+            comment.updatedAt = getCurrentTimestamp(); // Update comment's own timestamp
+            state.updatedAt = getCurrentTimestamp(); // Update post's timestamp
             return Result.ok(null);
         } else {
             return Result.err("Comment not found");
@@ -364,7 +364,7 @@ export class PostAgent extends BaseAgent {
             comment.likes = comment.likes.filter(l => l[0] !== userId);
 
             if (comment.likes.length !== initialLikes) {
-                const now = Date.now();
+                const now = getCurrentTimestamp();
                 comment.updatedAt = now;
                 state.updatedAt = now;
                 return Result.ok(null);

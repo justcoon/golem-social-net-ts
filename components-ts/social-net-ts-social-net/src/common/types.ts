@@ -29,3 +29,7 @@ export function isPositiveLike(type: LikeType): boolean {
 export function isNegativeLike(type: LikeType): boolean {
     return type === LikeType.Dislike;
 }
+
+export interface Timestamp {
+    timestamp: string;
+}

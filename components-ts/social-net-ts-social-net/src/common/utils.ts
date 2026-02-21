@@ -1,3 +1,5 @@
+import { Timestamp } from './types';
+
 export function arrayChunks<T>(array: T[], chunkSize: number): T[][] {
     const chunks: T[][] = [];
 
@@ -6,4 +8,10 @@ export function arrayChunks<T>(array: T[], chunkSize: number): T[][] {
     }
 
     return chunks;
+}
+
+export function getCurrentTimestamp(): Timestamp {
+    return {
+        timestamp: new Date().toISOString().replace('Z', '000+00:00')
+    };
 }

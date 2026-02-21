@@ -7,9 +7,10 @@ import {
 } from '@golemcloud/golem-ts-sdk';
 import { v4 as uuidv4 } from 'uuid';
 
-import { LikeType } from '../common/types';
+import { LikeType, Timestamp } from '../common/types';
 import { serialize, deserialize } from '../common/snapshot';
-import {UserChatsAgent} from "../user_chats";
+import { getCurrentTimestamp } from '../common/utils';
+import { UserChatsAgent } from "../user_chats";
 
 const MAX_CHAT_LENGTH = 2000;
 
@@ -18,8 +19,8 @@ export interface Message {
     content: string;
     likes: [string, LikeType][];
     createdBy: string;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface Chat {
@@ -27,17 +28,17 @@ export interface Chat {
     createdBy: string;
     participants: string[];
     messages: Message[];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
-function executeChatUpdates(chatId: string, participantsIds: string[], updatedAt: number) {
+function executeChatUpdates(chatId: string, participantsIds: string[], updatedAt: Timestamp) {
     for (const pId of participantsIds) {
         UserChatsAgent.get(pId).chatUpdated.trigger(chatId, updatedAt);
     }
 }
 
-function executeAddChat(chatId: string, createdBy: string, createdAt: number, participantsIds: string[]) {
+function executeAddChat(chatId: string, createdBy: string, createdAt: Timestamp, participantsIds: string[]) {
     for (const pId of participantsIds) {
         if (pId !== createdBy) {
             UserChatsAgent.get(pId).addChat.trigger(chatId, createdBy, createdAt);
@@ -57,7 +58,7 @@ export class ChatAgent extends BaseAgent {
 
     private getState(): Chat {
         if (this.state === null) {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             this.state = {
                 chatId: this._id,
                 createdBy: "",
@@ -78,7 +79,7 @@ export class ChatAgent extends BaseAgent {
 
     @prompt("Initialize the chat")
     @description("Initializes a new chat with participants")
-    async initChat(participantsIds: string[], createdBy: string, createdAt: number): Promise<Result<null, string>> {
+    async initChat(participantsIds: string[], createdBy: string, createdAt: Timestamp): Promise<Result<null, string>> {
         const pSet = new Set(participantsIds);
         pSet.add(createdBy);
         const uniqueParticipants = Array.from(pSet);
@@ -118,7 +119,7 @@ export class ChatAgent extends BaseAgent {
             const oldParticipants = [...state.participants];
 
             state.participants.push(...newParticipants);
-            state.updatedAt = Date.now();
+            state.updatedAt = getCurrentTimestamp();
 
             executeAddChat(state.chatId, state.createdBy, state.updatedAt, newParticipants);
             executeChatUpdates(state.chatId, oldParticipants, state.updatedAt);
@@ -140,7 +141,7 @@ export class ChatAgent extends BaseAgent {
         if (state.messages.length >= MAX_CHAT_LENGTH) {
             return Result.err("Max chat length");
         } else {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             const message: Message = {
                 messageId: uuidv4(),
                 content: content,
@@ -172,7 +173,7 @@ export class ChatAgent extends BaseAgent {
         state.messages = state.messages.filter(m => m.messageId !== messageId);
 
         if (state.messages.length !== initialLength) {
-            state.updatedAt = Date.now();
+            state.updatedAt = getCurrentTimestamp();
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
             return Result.ok(null);
         } else {
@@ -194,7 +195,7 @@ export class ChatAgent extends BaseAgent {
         if (msg) {
             msg.likes = msg.likes.filter(l => l[0] !== userId);
             msg.likes.push([userId, likeType]);
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             msg.updatedAt = now;
             state.updatedAt = now;
 
@@ -220,7 +221,7 @@ export class ChatAgent extends BaseAgent {
             const initialLikes = msg.likes.length;
             msg.likes = msg.likes.filter(l => l[0] !== userId);
             if (msg.likes.length !== initialLikes) {
-                const now = Date.now();
+                const now = getCurrentTimestamp();
                 msg.updatedAt = now;
                 state.updatedAt = now;
                 executeChatUpdates(state.chatId, state.participants, state.updatedAt);

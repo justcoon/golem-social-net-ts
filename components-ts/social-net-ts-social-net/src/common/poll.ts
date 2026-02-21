@@ -1,12 +1,15 @@
+import { Timestamp } from './types';
+import { getCurrentTimestamp } from './utils';
+
 export async function pollForUpdates<T>(
     userId: string,
-    updatesSince: number | undefined,
+    updatesSince: Timestamp | undefined,
     iterWaitTimeMs: number | undefined,
     maxWaitTimeMs: number | undefined,
-    getUpdatesFn: (id: string, since: number) => Promise<T[] | undefined>,
+    getUpdatesFn: (id: string, since: Timestamp) => Promise<T[] | undefined>,
     logPrefix: string
 ): Promise<T[] | undefined> {
-    const since = updatesSince ?? Date.now();
+    const since = updatesSince ?? getCurrentTimestamp();
     const maxWaitTime = maxWaitTimeMs ?? 10000;
     const iterWaitTime = iterWaitTimeMs ?? 1000;
     const startTime = Date.now();
@@ -16,7 +19,7 @@ export async function pollForUpdates<T>(
     while (!done) {
         const elapsedTime = Date.now() - startTime;
         console.log(
-            `${logPrefix} - user id: ${userId}, updates since: ${since.toString()}, elapsed time: ${elapsedTime}ms, max wait time: ${maxWaitTime}ms`
+            `${logPrefix} - user id: ${userId}, updates since: ${since.timestamp}, elapsed time: ${elapsedTime}ms, max wait time: ${maxWaitTime}ms`
         );
 
         const res = await getUpdatesFn(userId, since);

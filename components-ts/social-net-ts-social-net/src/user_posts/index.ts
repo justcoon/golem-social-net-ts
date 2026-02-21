@@ -6,20 +6,23 @@ import {
     description,
 } from '@golemcloud/golem-ts-sdk';
 
+import { Timestamp } from '../common/types';
+import { getCurrentTimestamp } from '../common/utils';
+
 import { Query } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
 import { Post, PostAgent, matchesPost, fetchPostsByIds } from '../post/index';
 
 export interface PostRef {
     postId: string;
-    createdAt: number;
+    createdAt: Timestamp;
 }
 
 export interface UserPosts {
     userId: string;
     posts: PostRef[];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface UserPostsUpdates {
@@ -39,7 +42,7 @@ export class UserPostsAgent extends BaseAgent {
 
     private getState(): UserPosts {
         if (this.state === null) {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             this.state = {
                 userId: this._id,
                 posts: [],
@@ -58,12 +61,12 @@ export class UserPostsAgent extends BaseAgent {
 
     @prompt("Get updates")
     @description("Returns post updates since a given time")
-    async getUpdates(updatesSince: number): Promise<UserPostsUpdates | null> {
+    async getUpdates(updatesSince: Timestamp): Promise<UserPostsUpdates | null> {
         if (this.state !== null) {
-            console.log(`get updates - updates since: ${updatesSince.toString()}`);
-            const sinceMs = updatesSince;
+            console.log(`get updates - updates since: ${updatesSince.timestamp}`);
+            const since = updatesSince;
 
-            const updates = this.state.posts.filter(p => p.createdAt > sinceMs);
+            const updates = this.state.posts.filter(p => p.createdAt.timestamp > since.timestamp);
             return {
                 userId: this.state.userId,
                 posts: updates
@@ -83,7 +86,7 @@ export class UserPostsAgent extends BaseAgent {
 
         const postRef: PostRef = {
             postId: postId,
-            createdAt: Date.now()
+            createdAt: getCurrentTimestamp()
         };
 
         PostAgent.get(postId).initPost.trigger(state.userId, content);
@@ -154,10 +157,10 @@ export class UserPostsViewAgent extends BaseAgent {
 
     @prompt("Get posts updates view")
     @description("Returns updated fetched posts")
-    async getPostsUpdatesView(userId: string, updatesSince: number): Promise<Post[] | null> {
+    async getPostsUpdatesView(userId: string, updatesSince: Timestamp): Promise<Post[] | null> {
         const userPostsUpdates = await UserPostsAgent.get(userId).getUpdates(updatesSince);
 
-        console.log(`get posts updates view - user id: ${userId}, updates since: ${updatesSince.toString()}`);
+        console.log(`get posts updates view - user id: ${userId}, updates since: ${updatesSince.timestamp}`);
 
         if (userPostsUpdates !== null) {
             const updatedPostRefs = userPostsUpdates.posts;

@@ -8,6 +8,8 @@ import {
 
 import { Query, optTextExactMatches, textExactMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
+import { Timestamp } from '../common/types';
+import { getCurrentTimestamp } from '../common/utils';
 import { pollForUpdates } from '../common/poll';
 import { arrayChunks } from '../common/utils';
 import { Chat, ChatAgent } from '../chat/index';
@@ -17,15 +19,15 @@ const CHATS_MAX_COUNT = 500;
 export interface ChatRef {
     chatId: string;
     createdBy: string;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface UserChats {
     userId: string;
     chats: ChatRef[];
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface UserChatsUpdates {
@@ -45,7 +47,7 @@ export class UserChatsAgent extends BaseAgent {
 
     private getState(): UserChats {
         if (this.state === null) {
-            const now = Date.now();
+            const now = getCurrentTimestamp();
             this.state = {
                 userId: this._id,
                 chats: [],
@@ -69,7 +71,7 @@ export class UserChatsAgent extends BaseAgent {
         const chatId = crypto.randomUUID();
         console.log(`create chat - chat id: ${chatId}, created by: ${state.userId}, participants: ${participantsIds.length}`);
 
-        const now = Date.now();
+        const now = getCurrentTimestamp();
         const chatRef: ChatRef = {
             chatId,
             createdBy: state.userId,
@@ -79,7 +81,7 @@ export class UserChatsAgent extends BaseAgent {
 
         state.updatedAt = now;
         state.chats.push(chatRef);
-        state.chats.sort((a, b) => b.updatedAt - a.updatedAt);
+        state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
 
         if (state.chats.length > CHATS_MAX_COUNT) {
             state.chats = state.chats.slice(0, CHATS_MAX_COUNT);
@@ -93,12 +95,12 @@ export class UserChatsAgent extends BaseAgent {
 
     @prompt("Get updates")
     @description("Returns chat updates since a given time")
-    async getUpdates(updatesSince: number): Promise<UserChatsUpdates | null> {
+    async getUpdates(updatesSince: Timestamp): Promise<UserChatsUpdates | null> {
         if (this.state !== null) {
-            console.log(`get updates - updates since: ${updatesSince.toString()}`);
-            const sinceMs = updatesSince;
+            console.log(`get updates - updates since: ${updatesSince.timestamp}`);
+            const since = updatesSince;
 
-            const updates = this.state.chats.filter(c => c.updatedAt > sinceMs);
+            const updates = this.state.chats.filter(c => c.updatedAt.timestamp > since.timestamp);
             return {
                 userId: this.state.userId,
                 chats: updates
@@ -109,15 +111,15 @@ export class UserChatsAgent extends BaseAgent {
 
     @prompt("Chat updated")
     @description("Triggered when a chat is updated")
-    async chatUpdated(chatId: string, updatedAt: number): Promise<Result<null, string>> {
+    async chatUpdated(chatId: string, updatedAt: Timestamp): Promise<Result<null, string>> {
         const state = this.getState();
-        console.log(`chat updated - chat id: ${chatId}, updated at: ${updatedAt.toString()}`);
+        console.log(`chat updated - chat id: ${chatId}, updated at: ${updatedAt.timestamp}`);
 
         const chatIdx = state.chats.findIndex(c => c.chatId === chatId);
         if (chatIdx !== -1) {
             state.chats[chatIdx]!.updatedAt = updatedAt;
-            state.chats.sort((a, b) => b.updatedAt - a.updatedAt);
-            state.updatedAt = Date.now();
+            state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
+            state.updatedAt = getCurrentTimestamp();
             return Result.ok(null);
         } else {
             console.log(`chat updated - chat id: ${chatId} - chat not found`);
@@ -127,24 +129,24 @@ export class UserChatsAgent extends BaseAgent {
 
     @prompt("Add chat")
     @description("Triggered when a new chat is added to the user's list")
-    async addChat(chatId: string, createdBy: string, createdAt: number): Promise<Result<null, string>> {
+    async addChat(chatId: string, createdBy: string, createdAt: Timestamp): Promise<Result<null, string>> {
         const state = this.getState();
-        console.log(`add chat - chat id: ${chatId}, created by: ${createdBy}, created at: ${createdAt.toString()}`);
+        console.log(`add chat - chat id: ${chatId}, created by: ${createdBy}, created at: ${createdAt.timestamp}`);
 
         if (!state.chats.find(c => c.chatId === chatId)) {
             state.chats.push({
                 chatId,
                 createdBy,
                 createdAt: createdAt,
-                updatedAt: Date.now()
+                updatedAt: getCurrentTimestamp()
             });
 
-            state.chats.sort((a, b) => b.updatedAt - a.updatedAt);
+            state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
 
             if (state.chats.length > CHATS_MAX_COUNT) {
                 state.chats = state.chats.slice(0, CHATS_MAX_COUNT);
             }
-            state.updatedAt = Date.now();
+            state.updatedAt = getCurrentTimestamp();
         }
         return Result.ok(null);
     }
@@ -155,7 +157,7 @@ export class UserChatsAgent extends BaseAgent {
         const state = this.getState();
         console.log(`remove chat - chat id: ${chatId}`);
         state.chats = state.chats.filter(c => c.chatId !== chatId);
-        state.updatedAt = Date.now();
+        state.updatedAt = getCurrentTimestamp();
         return Result.ok(null);
     }
 
@@ -285,10 +287,10 @@ export class UserChatsViewAgent extends BaseAgent {
 
     @prompt("Get chats updates view")
     @description("Returns updated fetched chats")
-    async getChatsUpdatesView(userId: string, updatesSince: number): Promise<Chat[] | null> {
+    async getChatsUpdatesView(userId: string, updatesSince: Timestamp): Promise<Chat[] | null> {
         const userChatsUpdates = await UserChatsAgent.get(userId).getUpdates(updatesSince);
 
-        console.log(`get chats updates view - user id: ${userId}, updates since: ${updatesSince.toString()}`);
+        console.log(`get chats updates view - user id: ${userId}, updates since: ${updatesSince.timestamp}`);
 
         if (userChatsUpdates !== null) {
             const updatedChatRefs = userChatsUpdates.chats;
@@ -315,7 +317,7 @@ export class UserChatsUpdatesAgent extends BaseAgent {
     @description("Polls and retrieves chat updates for a user")
     async getChatsUpdates(
         userId: string,
-        updatesSince: number | null,
+        updatesSince: Timestamp | null,
         iterWaitTime: number | null,
         maxWaitTime: number | null
     ): Promise<ChatRef[] | null> {
