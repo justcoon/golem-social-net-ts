@@ -1,0 +1,9 @@
+{
+  "name": "social-net-ts-social-net",
+  "dependencies": {
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0"
+  }
+}
