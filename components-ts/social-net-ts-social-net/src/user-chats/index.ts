@@ -6,7 +6,7 @@ import {
     description,
 } from '@golemcloud/golem-ts-sdk';
 
-import { Query, optTextExactMatches, textExactMatches } from '../common/query';
+import { Query, optTextExactMatches, textExactMatches, textMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
 import { Timestamp } from '../common/types';
 import { getCurrentTimestamp } from '../common/utils';
@@ -209,6 +209,7 @@ class ChatQueryMatcher {
                 case "createdby":
                     matches = textExactMatches(chatRef.createdBy, value);
                     break;
+                case "participants":
                 case "content":
                     matches = true;
                     break;
@@ -227,11 +228,14 @@ class ChatQueryMatcher {
             let matches = false;
             switch (field.toLowerCase()) {
                 case "content":
-                    matches = chat.messages.some(m => textExactMatches(m.content, value));
+                    matches = chat.messages.some(m => textMatches(m.content, value));
                     break;
                 case "created-by":
                 case "createdby":
-                    matches = true;
+                    matches = textExactMatches(chat.createdBy, value);
+                    break;
+                case "participants":
+                    matches = chat.participants.some(p => textExactMatches(p, value));
                     break;
                 default:
                     matches = false;
@@ -241,16 +245,11 @@ class ChatQueryMatcher {
             }
         }
 
-        if (this.query.terms.length > 0) {
-            for (const term of this.query.terms) {
-                const matchesTerm = chat.messages.some(m => textExactMatches(m.content, term));
-                if (!matchesTerm) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
+        return this.query.terms.length === 0 || this.query.terms.some(term => {
+            const matchesContent = chat.messages.some(m => textMatches(m.content, term));
+            const matchesParticipants = chat.participants.some(p => textExactMatches(p, term));
+            return matchesContent || matchesParticipants;
+        });
     }
 }
 

@@ -8,11 +8,11 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 
 import { LikeType, Timestamp } from '../common/types';
-import { Query, textExactMatches } from '../common/query';
+import { Query, textExactMatches, textMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
 import { arrayChunks, getCurrentTimestamp } from '../common/utils';
 import { UserAgent } from '../user/index';
-import { PostRef, UserTimelineAgent } from '../user_timeline/index';
+import { PostRef, UserTimelineAgent } from '../user-timeline/index';
 
 const MAX_COMMENTS_LENGTH = 2000;
 
@@ -46,7 +46,10 @@ export function matchesPost(post: Post, query: Query): boolean {
                 matches = textExactMatches(post.createdBy, value);
                 break;
             case "content":
-                matches = textExactMatches(post.content, value);
+                matches = textMatches(post.content, value);
+                break;
+            case "comments":
+                matches = post.comments.some(([_, comment]) => textMatches(comment.content, value));
                 break;
             default:
                 matches = false;
@@ -56,14 +59,11 @@ export function matchesPost(post: Post, query: Query): boolean {
         }
     }
 
-    if (query.terms.length > 0) {
-        for (const term of query.terms) {
-            if (!textExactMatches(post.content, term)) {
-                return false;
-            }
-        }
-    }
-    return true;
+    return query.terms.length === 0 || query.terms.some(term => {
+        const matchesContent = textMatches(post.content, term);
+        const matchesComments = post.comments.some(([_, comment]) => textMatches(comment.content, term));
+        return matchesContent || matchesComments;
+    });
 }
 
 export interface PostUpdate {

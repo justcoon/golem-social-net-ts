@@ -9,10 +9,10 @@ import {
     getSelfMetadata
 } from '@golemcloud/golem-ts-sdk';
 
-import { getOppositeConnectionType, UserConnectionType, Timestamp } from '../common/types';
-import { serialize, deserialize } from '../common/snapshot';
-import { Query, optTextMatches, textExactMatches } from '../common/query';
-import { arrayChunks, getCurrentTimestamp } from '../common/utils';
+import {getOppositeConnectionType, UserConnectionType, Timestamp} from '../common/types';
+import {serialize, deserialize} from '../common/snapshot';
+import {Query, optTextMatches, textExactMatches} from '../common/query';
+import {arrayChunks, getCurrentTimestamp} from '../common/utils';
 
 export interface ConnectedUser {
     userId: string;
@@ -200,14 +200,11 @@ class UserQueryMatcher {
             }
         }
 
-        if (this.query.terms.length > 0) {
-            return this.query.terms.every((term: string) =>
-                optTextMatches(user.name, term) ||
-                optTextMatches(user.email, term)
-            );
-        }
-
-        return true;
+        return this.query.terms.length === 0 || this.query.terms.some((term: string) =>
+            textExactMatches(user.userId, term) ||
+            optTextMatches(user.name, term) ||
+            optTextMatches(user.email, term)
+        );
     }
 }
 
@@ -232,7 +229,7 @@ function getUserAgentId(agentName: string): string | undefined {
 }
 
 
-@agent({ mode: "ephemeral" })
+@agent({mode: "ephemeral"})
 export class UserSearchAgent extends BaseAgent {
     constructor() {
         super();

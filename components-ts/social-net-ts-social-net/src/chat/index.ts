@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { LikeType, Timestamp } from '../common/types';
 import { serialize, deserialize } from '../common/snapshot';
 import { getCurrentTimestamp } from '../common/utils';
-import { UserChatsAgent } from "../user_chats";
+import { UserChatsAgent } from "../user-chats";
 
 const MAX_CHAT_LENGTH = 2000;
 
