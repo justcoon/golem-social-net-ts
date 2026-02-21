@@ -164,13 +164,6 @@ export class UserAgent extends BaseAgent {
             const raw = deserialize<User>(bytes);
             if (raw) {
                 this.state = raw;
-                // rehydrate dates if necessary
-                this.state.createdAt = this.state.createdAt;
-                this.state.updatedAt = this.state.updatedAt;
-                for (const cu of this.state.connectedUsers) {
-                    cu[1].createdAt = cu[1].createdAt;
-                    cu[1].updatedAt = cu[1].updatedAt;
-                }
             } else {
                 this.state = null;
             }

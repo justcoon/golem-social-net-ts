@@ -382,12 +382,6 @@ export class PostAgent extends BaseAgent {
             const raw = deserialize<Post>(bytes);
             if (raw) {
                 this.state = raw;
-                this.state.createdAt = this.state.createdAt;
-                this.state.updatedAt = this.state.updatedAt;
-                for (const c of this.state.comments) {
-                    c[1].createdAt = c[1].createdAt;
-                    c[1].updatedAt = c[1].updatedAt;
-                }
             } else {
                 this.state = null;
             }

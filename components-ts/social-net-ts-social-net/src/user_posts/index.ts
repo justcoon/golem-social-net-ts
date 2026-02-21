@@ -103,12 +103,6 @@ export class UserPostsAgent extends BaseAgent {
             const raw = deserialize<UserPosts>(bytes);
             if (raw) {
                 this.state = raw;
-                this.state.createdAt = this.state.createdAt;
-                this.state.updatedAt = this.state.updatedAt;
-                this.state.posts = (raw.posts || []).map((p: any) => ({
-                    postId: p.postId,
-                    createdAt: p.createdAt
-                }));
             } else {
                 this.state = null;
             }

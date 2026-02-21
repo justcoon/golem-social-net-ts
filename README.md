@@ -1,7 +1,7 @@
 # golem-social-net-ts
 
 ## Overview
-This is a simple social networking application built with an agent-based architecture, leveraging Golem Cloud for distributed, stateful agents.
+This is a simple social networking application built with an agent-based architecture and TypeScript, leveraging Golem Cloud for distributed, stateful agents.
 
 ![Architecture Diagram](architecture.png)
 

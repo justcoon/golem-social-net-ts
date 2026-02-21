@@ -168,14 +168,6 @@ export class UserChatsAgent extends BaseAgent {
             const raw = deserialize<UserChats>(bytes);
             if (raw) {
                 this.state = raw;
-                this.state.createdAt = this.state.createdAt;
-                this.state.updatedAt = this.state.updatedAt;
-                this.state.chats = (raw.chats || []).map((c: any) => ({
-                    chatId: c.chatId,
-                    createdBy: c.createdBy,
-                    createdAt: c.createdAt,
-                    updatedAt: c.updatedAt
-                }));
             } else {
                 this.state = null;
             }

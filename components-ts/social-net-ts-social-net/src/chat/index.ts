@@ -239,13 +239,6 @@ export class ChatAgent extends BaseAgent {
             const raw = deserialize<Chat>(bytes);
             if (raw) {
                 this.state = raw;
-                // rehydrate dates if necessary
-                this.state.createdAt = this.state.createdAt;
-                this.state.updatedAt = this.state.updatedAt;
-                for (const m of this.state.messages) {
-                    m.createdAt = m.createdAt;
-                    m.updatedAt = m.updatedAt;
-                }
             } else {
                 this.state = null;
             }

@@ -109,15 +109,6 @@ export class UserTimelineAgent extends BaseAgent {
             const raw = deserialize<UserTimeline>(bytes);
             if (raw) {
                 this.state = raw;
-                this.state.createdAt = this.state.createdAt;
-                this.state.updatedAt = this.state.updatedAt;
-                this.state.posts = (raw.posts || []).map((p: any) => ({
-                    postId: p.postId,
-                    createdBy: p.createdBy,
-                    createdAt: p.createdAt,
-                    createdByConnectionType: p.createdByConnectionType,
-                    updatedAt: p.updatedAt
-                }));
             } else {
                 this.state = null;
             }
