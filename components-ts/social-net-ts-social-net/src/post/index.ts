@@ -176,9 +176,7 @@ export class TimelinesUpdaterAgent extends BaseAgent {
     override async loadSnapshot(bytes: Uint8Array): Promise<void> {
         if (bytes.length > 0) {
             const raw = deserialize<PostUpdates>(bytes);
-            if (raw) {
-                this.state = raw;
-            }
+            this.state = raw;
         }
     }
 }
@@ -331,6 +329,10 @@ export class PostAgent extends BaseAgent {
     @prompt("Set like on a comment")
     @description("Sets a like for a comment")
     async setCommentLike(commentId: string, userId: string, likeType: LikeType): Promise<Result<null, string>> {
+        if (this.state === null) {
+            return Result.err("Post not exists");
+        }
+
         const state = this.getState();
         console.log(`set comment like - comment id: ${commentId}, user id: ${userId}, like type: ${likeType}`);
 
@@ -380,11 +382,7 @@ export class PostAgent extends BaseAgent {
     override async loadSnapshot(bytes: Uint8Array): Promise<void> {
         if (bytes.length > 0) {
             const raw = deserialize<Post>(bytes);
-            if (raw) {
-                this.state = raw;
-            } else {
-                this.state = null;
-            }
+            this.state = raw;
         }
     }
 }
