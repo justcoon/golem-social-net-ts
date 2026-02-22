@@ -104,11 +104,7 @@ export class UserPostsAgent extends BaseAgent {
     override async loadSnapshot(bytes: Uint8Array): Promise<void> {
         if (bytes.length > 0) {
             const raw = deserialize<UserPosts>(bytes);
-            if (raw) {
-                this.state = raw;
-            } else {
-                this.state = null;
-            }
+            this.state = raw;
         }
     }
 }

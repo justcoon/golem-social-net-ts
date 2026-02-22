@@ -108,11 +108,7 @@ export class UserTimelineAgent extends BaseAgent {
     override async loadSnapshot(bytes: Uint8Array): Promise<void> {
         if (bytes.length > 0) {
             const raw = deserialize<UserTimeline>(bytes);
-            if (raw) {
-                this.state = raw;
-            } else {
-                this.state = null;
-            }
+            this.state = raw;
         }
     }
 }

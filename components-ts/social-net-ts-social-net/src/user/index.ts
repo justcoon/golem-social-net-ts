@@ -9,6 +9,7 @@ import {
     getSelfMetadata
 } from '@golemcloud/golem-ts-sdk';
 
+import {ComponentId} from '@golemcloud/golem-ts-sdk';
 import {getOppositeConnectionType, UserConnectionType, Timestamp} from '../common/types';
 import {serialize, deserialize} from '../common/snapshot';
 import {Query, optTextMatches, textExactMatches} from '../common/query';
@@ -162,11 +163,7 @@ export class UserAgent extends BaseAgent {
     override async loadSnapshot(bytes: Uint8Array): Promise<void> {
         if (bytes.length > 0) {
             const raw = deserialize<User>(bytes);
-            if (raw) {
-                this.state = raw;
-            } else {
-                this.state = null;
-            }
+            this.state = raw;
         }
     }
 }
@@ -192,6 +189,10 @@ class UserQueryMatcher {
                 case "email":
                     matches = optTextMatches(user.email, value);
                     break;
+                case "connected-users":
+                case "connectedusers":
+                    matches = user.connectedUsers.some((u) => textExactMatches(u[0], value));
+                    break;
                 default:
                     matches = false;
             }
@@ -208,7 +209,7 @@ class UserQueryMatcher {
     }
 }
 
-const AGENT_FILTER: AgentAnyFilter = {
+const USER_AGENT_FILTER: AgentAnyFilter = {
     filters: [{
         filters: [
             {
@@ -231,59 +232,54 @@ function getUserAgentId(agentName: string): string | undefined {
 
 @agent({mode: "ephemeral"})
 export class UserSearchAgent extends BaseAgent {
+    private readonly componentId: ComponentId;
+
     constructor() {
         super();
+        this.componentId = getSelfMetadata().agentId.componentId;
     }
 
     @prompt("Search users")
     @description("Searches for users using discovery")
     async search(query: string): Promise<Result<User[], string>> {
-        const metadata = getSelfMetadata();
-        const componentId = metadata.agentId.componentId;
-        if (componentId) {
-            console.log("Search users - query: " + query);
-            const matcher = new UserQueryMatcher(query);
+        console.log("Search users - query: " + query);
+        const matcher = new UserQueryMatcher(query);
 
-            const result: User[] = [];
-            const processedIds = new Set<string>();
+        const result: User[] = [];
+        const processedIds = new Set<string>();
 
-            const getter = new GetAgents(componentId, AGENT_FILTER, true);
-            let agents = await getter.getNext();
+        const getter = new GetAgents(this.componentId, USER_AGENT_FILTER, true);
+        let agents = await getter.getNext();
 
-            while (agents && agents.length > 0) {
+        while (agents && agents.length > 0) {
 
-                const ids = agents.map((value) => getUserAgentId(value.agentId.agentId))
-                    .filter((id) => id !== undefined)
-                    .filter((id) => !processedIds.has(id));
+            const ids = agents.map((value) => getUserAgentId(value.agentId.agentId))
+                .filter((id) => id !== undefined)
+                .filter((id) => !processedIds.has(id));
 
-                if (ids.length > 0) {
-                    const idsChunks = arrayChunks(ids, 5);
+            if (ids.length > 0) {
+                const idsChunks = arrayChunks(ids, 5);
 
-                    for (const ids of idsChunks) {
-                        console.log("Search users - ids: (" + ids + ")");
-                        const promises = ids.map(async (id) => await UserAgent.get(id).getUser());
+                for (const ids of idsChunks) {
+                    console.log("Search users - ids: (" + ids + ")");
 
-                        const promisesResult = await Promise.all(promises);
+                    const promises = ids.map(async (id) => await UserAgent.get(id).getUser());
+                    const promisesResult = await Promise.all(promises);
 
-                        console.log("Search users - ids: (" + ids + ") fetched: " + promisesResult.length);
-
-                        for (const value of promisesResult) {
-                            if (value) {
-                                processedIds.add(value.userId);
-                                if (matcher.matches(value)) {
-                                    result.push(value);
-                                }
+                    for (const value of promisesResult) {
+                        if (value) {
+                            processedIds.add(value.userId);
+                            if (matcher.matches(value)) {
+                                result.push(value);
                             }
                         }
                     }
                 }
-
-                agents = await getter.getNext();
             }
 
-            return Result.ok(result);
-        } else {
-            return Result.err("Component not found");
+            agents = await getter.getNext();
         }
+
+        return Result.ok(result);
     }
 }
