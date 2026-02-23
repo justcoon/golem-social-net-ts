@@ -30,6 +30,28 @@ export interface UserPostsUpdates {
     posts: PostRef[];
 }
 
+
+export function initUserPostsState(userId: string, now: Timestamp): UserPosts {
+    return {
+        userId,
+        posts: [],
+        createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function addUserPost(state: UserPosts, postId: string, now: Timestamp): PostRef {
+    const postRef: PostRef = {
+        postId: postId,
+        createdAt: now
+    };
+
+    state.updatedAt = now;
+    state.posts.push(postRef);
+
+    return postRef;
+}
+
 @agent()
 export class UserPostsAgent extends BaseAgent {
     private readonly _id: string;
@@ -42,13 +64,7 @@ export class UserPostsAgent extends BaseAgent {
 
     private getState(): UserPosts {
         if (this.state === null) {
-            const now = getCurrentTimestamp();
-            this.state = {
-                userId: this._id,
-                posts: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            this.state = initUserPostsState(this._id, getCurrentTimestamp());
         }
         return this.state;
     }
@@ -84,15 +100,10 @@ export class UserPostsAgent extends BaseAgent {
         const postId = crypto.randomUUID();
         console.log(`create post - id: ${postId}`);
 
-        const postRef: PostRef = {
-            postId: postId,
-            createdAt: getCurrentTimestamp()
-        };
+        const now = getCurrentTimestamp();
+        addUserPost(state, postId, now);
 
         PostAgent.get(postId).initPost.trigger(state.userId, content);
-
-        state.updatedAt = postRef.createdAt;
-        state.posts.push(postRef);
 
         return Result.ok(postId);
     }

@@ -79,6 +79,28 @@ export interface PostUpdates {
     updatedAt: Timestamp;
 }
 
+export function initPostUpdates(userId: string, now: Timestamp): PostUpdates {
+    return {
+        userId,
+        updates: [],
+        createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function updatePostUpdates(state: PostUpdates, update: PostUpdate, now: Timestamp): void {
+    state.updates = state.updates.filter(u => u.postId !== update.postId);
+    state.updates.push(update);
+    state.updatedAt = now;
+}
+
+export function clearPostUpdates(state: PostUpdates, now: Timestamp): PostUpdate[] {
+    const updates = [...state.updates];
+    state.updates = [];
+    state.updatedAt = now;
+    return updates;
+}
+
 @agent()
 export class TimelinesUpdaterAgent extends BaseAgent {
     private readonly _id: string;
@@ -91,13 +113,7 @@ export class TimelinesUpdaterAgent extends BaseAgent {
 
     private getState(): PostUpdates {
         if (this.state === null) {
-            const now = getCurrentTimestamp();
-            this.state = {
-                userId: this._id,
-                updates: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            this.state = initPostUpdates(this._id, getCurrentTimestamp());
         }
         return this.state;
     }
@@ -106,12 +122,7 @@ export class TimelinesUpdaterAgent extends BaseAgent {
     @description("Trigger timelines update on post creation or modifications")
     async postUpdated(update: PostUpdate, processImmediately: boolean): Promise<void> {
         console.log(`timelines updater - user: ${this._id}, post: ${update.postId}`);
-        const state = this.getState();
-
-        // Add or update the queued update
-        state.updates = state.updates.filter(u => u.postId !== update.postId);
-        state.updates.push(update);
-        state.updatedAt = getCurrentTimestamp();
+        updatePostUpdates(this.getState(), update, getCurrentTimestamp());
 
         if (processImmediately) {
             await this.executePostsUpdates();
@@ -134,9 +145,7 @@ export class TimelinesUpdaterAgent extends BaseAgent {
 
         const user = await UserAgent.get(this._id).getUser();
         if (user) {
-            const updates = [...state.updates];
-            state.updates = [];
-            state.updatedAt = getCurrentTimestamp();
+            const updates = clearPostUpdates(state, getCurrentTimestamp());
 
             const connectedUsers = user.connectedUsers;
             const postRefs: PostRef[] = updates.map(u => ({
@@ -181,6 +190,103 @@ export class TimelinesUpdaterAgent extends BaseAgent {
     }
 }
 
+export function initPostState(postId: string, now: Timestamp): Post {
+    return {
+        postId,
+        content: "",
+        createdBy: "",
+        likes: [],
+        comments: [],
+        createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function initializePostAgent(post: Post, createdBy: string, content: string): void {
+    post.createdBy = createdBy;
+    post.content = content;
+}
+
+export function setPostLike(post: Post, userId: string, likeType: LikeType, now: Timestamp): void {
+    post.likes = post.likes.filter(l => l[0] !== userId);
+    post.likes.push([userId, likeType]);
+    post.updatedAt = now;
+}
+
+export function removePostLike(post: Post, userId: string, now: Timestamp): Result<null, string> {
+    const initialLength = post.likes.length;
+    post.likes = post.likes.filter(l => l[0] !== userId);
+
+    if (post.likes.length !== initialLength) {
+        post.updatedAt = now;
+        return Result.ok(null);
+    } else {
+        return Result.err("Like not found");
+    }
+}
+
+export function addPostComment(post: Post, userId: string, content: string, parentCommentId: string | null, now: Timestamp): Result<string, string> {
+    if (post.comments.length >= MAX_COMMENTS_LENGTH) {
+        return Result.err("Max comments limit reached");
+    }
+
+    const cid = uuidv4();
+    post.comments.push([cid, {
+        commentId: cid,
+        parentCommentId,
+        content,
+        likes: [],
+        createdBy: userId,
+        createdAt: now,
+        updatedAt: now
+    }]);
+    post.updatedAt = now;
+
+    return Result.ok(cid);
+}
+
+export function removePostComment(post: Post, commentId: string, now: Timestamp): Result<null, string> {
+    const initialLength = post.comments.length;
+    post.comments = post.comments.filter(c => c[0] !== commentId && c[1].parentCommentId !== commentId);
+
+    if (post.comments.length !== initialLength) {
+        post.updatedAt = now;
+        return Result.ok(null);
+    } else {
+        return Result.err("Comment not found");
+    }
+}
+
+export function setPostCommentLike(post: Post, commentId: string, userId: string, likeType: LikeType, now: Timestamp): Result<null, string> {
+    const commentTuple = post.comments.find(c => c[0] === commentId);
+    if (commentTuple) {
+        const comment = commentTuple[1];
+        comment.likes = comment.likes.filter(l => l[0] !== userId);
+        comment.likes.push([userId, likeType]);
+        comment.updatedAt = now;
+        post.updatedAt = now;
+        return Result.ok(null);
+    } else {
+        return Result.err("Comment not found");
+    }
+}
+
+export function removePostCommentLike(post: Post, commentId: string, userId: string, now: Timestamp): Result<null, string> {
+    const commentTuple = post.comments.find(c => c[0] === commentId);
+    if (commentTuple) {
+        const comment = commentTuple[1];
+        const initialLikes = comment.likes.length;
+        comment.likes = comment.likes.filter(l => l[0] !== userId);
+
+        if (comment.likes.length !== initialLikes) {
+            comment.updatedAt = now;
+            post.updatedAt = now;
+            return Result.ok(null);
+        }
+    }
+    return Result.err("Comment not found");
+}
+
 @agent()
 export class PostAgent extends BaseAgent {
     private readonly _id: string;
@@ -193,16 +299,7 @@ export class PostAgent extends BaseAgent {
 
     private getState(): Post {
         if (this.state === null) {
-            const now = getCurrentTimestamp();
-            this.state = {
-                postId: this._id,
-                content: "",
-                createdBy: "",
-                likes: [],
-                comments: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            this.state = initPostState(this._id, getCurrentTimestamp());
         }
         return this.state;
     }
@@ -223,8 +320,7 @@ export class PostAgent extends BaseAgent {
         const state = this.getState();
         console.log(`init post - created by: ${createdBy}, content: ${content} `);
 
-        state.createdBy = createdBy;
-        state.content = content;
+        initializePostAgent(state, createdBy, content);
 
         TimelinesUpdaterAgent.get(createdBy).postUpdated.trigger({
             postId: state.postId,
@@ -243,13 +339,7 @@ export class PostAgent extends BaseAgent {
         }
         const state = this.getState();
         console.log(`set like - user id: ${userId}, like type: ${likeType}`);
-
-        if (state) {
-            state.likes = state.likes.filter(l => l[0] !== userId);
-            state.likes.push([userId, likeType]);
-            state.updatedAt = getCurrentTimestamp();
-        }
-
+        setPostLike(state, userId, likeType, getCurrentTimestamp());
         return Result.ok(null);
     }
 
@@ -262,16 +352,7 @@ export class PostAgent extends BaseAgent {
 
         const state = this.getState();
         console.log(`remove like - user id: ${userId} `);
-
-        const initialLength = state.likes.length;
-        state.likes = state.likes.filter(l => l[0] !== userId);
-
-        if (state && state.likes.length !== initialLength) {
-            state.updatedAt = getCurrentTimestamp();
-            return Result.ok(null);
-        } else {
-            return Result.err("Like not found");
-        }
+        return removePostLike(state, userId, getCurrentTimestamp());
     }
 
     @prompt("Add a comment")
@@ -283,26 +364,7 @@ export class PostAgent extends BaseAgent {
 
         const state = this.getState();
         console.log(`add comment - user id: ${userId}, content: ${content} `);
-
-        if (state.comments.length >= MAX_COMMENTS_LENGTH) {
-            return Result.err("Max comments limit reached");
-        }
-
-        const now = getCurrentTimestamp();
-        const cid = uuidv4();
-
-        state.comments.push([cid, {
-            commentId: cid,
-            parentCommentId,
-            content,
-            likes: [],
-            createdBy: userId,
-            createdAt: now,
-            updatedAt: now
-        }]);
-        state.updatedAt = now;
-
-        return Result.ok(cid);
+        return addPostComment(state, userId, content, parentCommentId, getCurrentTimestamp());
     }
 
     @prompt("Remove a comment")
@@ -314,16 +376,7 @@ export class PostAgent extends BaseAgent {
 
         const state = this.getState();
         console.log(`remove comment - comment id: ${commentId} `);
-
-        const initialLength = state.comments.length;
-        state.comments = state.comments.filter(c => c[0] !== commentId && c[1].parentCommentId !== commentId);
-
-        if (state.comments.length !== initialLength) {
-            state.updatedAt = getCurrentTimestamp();
-            return Result.ok(null);
-        } else {
-            return Result.err("Comment not found");
-        }
+        return removePostComment(state, commentId, getCurrentTimestamp());
     }
 
     @prompt("Set like on a comment")
@@ -335,18 +388,7 @@ export class PostAgent extends BaseAgent {
 
         const state = this.getState();
         console.log(`set comment like - comment id: ${commentId}, user id: ${userId}, like type: ${likeType}`);
-
-        const commentTuple = state.comments.find(c => c[0] === commentId);
-        if (commentTuple) {
-            const comment = commentTuple[1];
-            comment.likes = comment.likes.filter(l => l[0] !== userId);
-            comment.likes.push([userId, likeType]);
-            comment.updatedAt = getCurrentTimestamp(); // Update comment's own timestamp
-            state.updatedAt = getCurrentTimestamp(); // Update post's timestamp
-            return Result.ok(null);
-        } else {
-            return Result.err("Comment not found");
-        }
+        return setPostCommentLike(state, commentId, userId, likeType, getCurrentTimestamp());
     }
 
     @prompt("Remove like from a comment")
@@ -358,21 +400,7 @@ export class PostAgent extends BaseAgent {
 
         const state = this.getState();
         console.log(`remove comment like - comment id: ${commentId}, user id: ${userId} `);
-
-        const cidx = state.comments.findIndex(c => c[0] === commentId);
-        if (cidx !== -1) {
-            const comment = state.comments[cidx]![1];
-            const initialLikes = comment.likes.length;
-            comment.likes = comment.likes.filter(l => l[0] !== userId);
-
-            if (comment.likes.length !== initialLikes) {
-                const now = getCurrentTimestamp();
-                comment.updatedAt = now;
-                state.updatedAt = now;
-                return Result.ok(null);
-            }
-        }
-        return Result.err("Comment not found");
+        return removePostCommentLike(state, commentId, userId, getCurrentTimestamp());
     }
 
     override async saveSnapshot(): Promise<Uint8Array> {
