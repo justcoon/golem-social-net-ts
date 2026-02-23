@@ -35,6 +35,30 @@ export interface UserTimelineUpdates {
     posts: PostRef[];
 }
 
+
+export function initUserTimelineState(userId: string, now: Timestamp): UserTimeline {
+    return {
+        userId,
+        posts: [],
+        createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function updateUserTimelinePosts(state: UserTimeline, postRefs: PostRef[], now: Timestamp): void {
+    const ids = new Set(postRefs.map(p => p.postId));
+
+    state.posts = state.posts.filter(p => !ids.has(p.postId));
+    state.posts.push(...postRefs);
+
+    state.posts.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
+
+    if (state.posts.length > POSTS_MAX_COUNT) {
+        state.posts = state.posts.slice(0, POSTS_MAX_COUNT);
+    }
+    state.updatedAt = now;
+}
+
 @agent()
 export class UserTimelineAgent extends BaseAgent {
     private readonly _id: string;
@@ -47,13 +71,7 @@ export class UserTimelineAgent extends BaseAgent {
 
     private getState(): UserTimeline {
         if (this.state === null) {
-            const now = getCurrentTimestamp();
-            this.state = {
-                userId: this._id,
-                posts: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            this.state = initUserTimelineState(this._id, getCurrentTimestamp());
         }
         return this.state;
     }
@@ -85,19 +103,7 @@ export class UserTimelineAgent extends BaseAgent {
     async postsUpdated(posts: PostRef[]): Promise<Result<null, string>> {
         const state = this.getState();
         console.log(`posts updated - count: ${posts.length}`);
-
-        const ids = new Set(posts.map(p => p.postId));
-
-        state.posts = state.posts.filter(p => !ids.has(p.postId));
-        state.posts.push(...posts);
-
-        state.posts.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
-
-        if (state.posts.length > POSTS_MAX_COUNT) {
-            state.posts = state.posts.slice(0, POSTS_MAX_COUNT);
-        }
-
-        state.updatedAt = getCurrentTimestamp();
+        updateUserTimelinePosts(state, posts, getCurrentTimestamp());
         return Result.ok(null);
     }
 

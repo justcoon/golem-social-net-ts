@@ -46,6 +46,93 @@ function executeAddChat(chatId: string, createdBy: string, createdAt: Timestamp,
     }
 }
 
+export function initChatState(chatId: string, now: Timestamp): Chat {
+    return {
+        chatId,
+        createdBy: "",
+        participants: [],
+        messages: [],
+        createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function initializeChatAgent(chat: Chat, participantsIds: string[], createdBy: string, createdAt: Timestamp): void {
+    const pSet = new Set(participantsIds);
+    pSet.add(createdBy);
+    chat.createdBy = createdBy;
+    chat.participants = Array.from(pSet);
+    chat.createdAt = createdAt;
+    chat.updatedAt = createdAt;
+}
+
+export function addChatParticipants(chat: Chat, participantsIds: string[], now: Timestamp): string[] {
+    const existingSet = new Set(chat.participants);
+    const newParticipants = participantsIds.filter(id => !existingSet.has(id));
+
+    if (newParticipants.length > 0) {
+        chat.participants.push(...newParticipants);
+        chat.updatedAt = now;
+    }
+    return newParticipants;
+}
+
+export function addChatMessage(chat: Chat, userId: string, content: string, now: Timestamp): Result<Message, string> {
+    if (chat.messages.length >= MAX_CHAT_LENGTH) {
+        return Result.err("Max chat length");
+    } else {
+        const message: Message = {
+            messageId: uuidv4(),
+            content: content,
+            likes: [],
+            createdBy: userId,
+            createdAt: now,
+            updatedAt: now
+        };
+
+        chat.updatedAt = message.createdAt;
+        chat.messages.push(message);
+        return Result.ok(message);
+    }
+}
+
+export function removeChatMessage(chat: Chat, messageId: string, now: Timestamp): boolean {
+    const initialLength = chat.messages.length;
+    chat.messages = chat.messages.filter(m => m.messageId !== messageId);
+
+    if (chat.messages.length !== initialLength) {
+        chat.updatedAt = now;
+        return true;
+    }
+    return false;
+}
+
+export function setChatMessageLike(chat: Chat, messageId: string, userId: string, likeType: LikeType, now: Timestamp): boolean {
+    const msg = chat.messages.find(m => m.messageId === messageId);
+    if (msg) {
+        msg.likes = msg.likes.filter(l => l[0] !== userId);
+        msg.likes.push([userId, likeType]);
+        msg.updatedAt = now;
+        chat.updatedAt = now;
+        return true;
+    }
+    return false;
+}
+
+export function removeChatMessageLike(chat: Chat, messageId: string, userId: string, now: Timestamp): boolean {
+    const msg = chat.messages.find(m => m.messageId === messageId);
+    if (msg) {
+        const initialLikes = msg.likes.length;
+        msg.likes = msg.likes.filter(l => l[0] !== userId);
+        if (msg.likes.length !== initialLikes) {
+            msg.updatedAt = now;
+            chat.updatedAt = now;
+            return true;
+        }
+    }
+    return false;
+}
+
 @agent()
 export class ChatAgent extends BaseAgent {
     private readonly _id: string;
@@ -58,15 +145,7 @@ export class ChatAgent extends BaseAgent {
 
     private getState(): Chat {
         if (this.state === null) {
-            const now = getCurrentTimestamp();
-            this.state = {
-                chatId: this._id,
-                createdBy: "",
-                participants: [],
-                messages: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            this.state = initChatState(this._id, getCurrentTimestamp());
         }
         return this.state;
     }
@@ -80,25 +159,25 @@ export class ChatAgent extends BaseAgent {
     @prompt("Initialize the chat")
     @description("Initializes a new chat with participants")
     async initChat(participantsIds: string[], createdBy: string, createdAt: Timestamp): Promise<Result<null, string>> {
+        if (this.state !== null) {
+            return Result.err("Chat already exists");
+        }
+
         const pSet = new Set(participantsIds);
         pSet.add(createdBy);
         const uniqueParticipants = Array.from(pSet);
 
-        if (this.state !== null) {
-            return Result.err("Chat already exists");
-        } else if (uniqueParticipants.length < 2) {
+        if (uniqueParticipants.length < 2) {
             return Result.err("Chat must have at least 2 participants");
-        } else {
-            const state = this.getState();
-            console.log(`init chat - created by: ${createdBy}, participants: ${uniqueParticipants.length}`);
-            state.createdBy = createdBy;
-            state.participants = uniqueParticipants;
-            state.createdAt = createdAt;
-            state.updatedAt = createdAt;
-
-            executeAddChat(state.chatId, createdBy, state.createdAt, state.participants);
-            return Result.ok(null);
         }
+
+        const state = this.getState();
+        console.log(`init chat - created by: ${createdBy}, participants: ${uniqueParticipants.length}`);
+
+        initializeChatAgent(state, participantsIds, createdBy, createdAt);
+
+        executeAddChat(state.chatId, createdBy, state.createdAt, state.participants);
+        return Result.ok(null);
     }
 
     @prompt("Add chat participants")
@@ -109,17 +188,13 @@ export class ChatAgent extends BaseAgent {
         }
 
         const state = this.getState();
-        const existingSet = new Set(state.participants);
-        const newParticipants = participantsIds.filter(id => !existingSet.has(id));
+        const oldParticipants = [...state.participants];
+        const newParticipants = addChatParticipants(state, participantsIds, getCurrentTimestamp());
 
         if (newParticipants.length === 0) {
             return Result.err("No new participants");
         } else {
             console.log(`add participants - new participants: ${newParticipants.length}`);
-            const oldParticipants = [...state.participants];
-
-            state.participants.push(...newParticipants);
-            state.updatedAt = getCurrentTimestamp();
 
             executeAddChat(state.chatId, state.createdBy, state.updatedAt, newParticipants);
             executeChatUpdates(state.chatId, oldParticipants, state.updatedAt);
@@ -138,24 +213,12 @@ export class ChatAgent extends BaseAgent {
         const state = this.getState();
         console.log(`add message - user id: ${userId}, content: ${content}`);
 
-        if (state.messages.length >= MAX_CHAT_LENGTH) {
-            return Result.err("Max chat length");
-        } else {
-            const now = getCurrentTimestamp();
-            const message: Message = {
-                messageId: uuidv4(),
-                content: content,
-                likes: [],
-                createdBy: userId,
-                createdAt: now,
-                updatedAt: now
-            };
-
-            state.updatedAt = message.createdAt;
-            state.messages.push(message);
-
+        const result = addChatMessage(state, userId, content, getCurrentTimestamp());
+        if (result.isOk()) {
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
-            return Result.ok(message.messageId);
+            return Result.ok(result.val.messageId);
+        } else {
+            return result;
         }
     }
 
@@ -169,11 +232,8 @@ export class ChatAgent extends BaseAgent {
         const state = this.getState();
         console.log(`remove message - message id: ${messageId}`);
 
-        const initialLength = state.messages.length;
-        state.messages = state.messages.filter(m => m.messageId !== messageId);
-
-        if (state.messages.length !== initialLength) {
-            state.updatedAt = getCurrentTimestamp();
+        const updated = removeChatMessage(state, messageId, getCurrentTimestamp());
+        if (updated) {
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
             return Result.ok(null);
         } else {
@@ -191,14 +251,8 @@ export class ChatAgent extends BaseAgent {
         const state = this.getState();
         console.log(`set message like - message id: ${messageId}, user id: ${userId}, like type: ${likeType}`);
 
-        const msg = state.messages.find(m => m.messageId === messageId);
-        if (msg) {
-            msg.likes = msg.likes.filter(l => l[0] !== userId);
-            msg.likes.push([userId, likeType]);
-            const now = getCurrentTimestamp();
-            msg.updatedAt = now;
-            state.updatedAt = now;
-
+        const updated = setChatMessageLike(state, messageId, userId, likeType, getCurrentTimestamp());
+        if (updated) {
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
             return Result.ok(null);
         } else {
@@ -216,19 +270,13 @@ export class ChatAgent extends BaseAgent {
         const state = this.getState();
         console.log(`remove message like - chat id: ${messageId}, user id: ${userId}`);
 
-        const msg = state.messages.find(m => m.messageId === messageId);
-        if (msg) {
-            const initialLikes = msg.likes.length;
-            msg.likes = msg.likes.filter(l => l[0] !== userId);
-            if (msg.likes.length !== initialLikes) {
-                const now = getCurrentTimestamp();
-                msg.updatedAt = now;
-                state.updatedAt = now;
-                executeChatUpdates(state.chatId, state.participants, state.updatedAt);
-                return Result.ok(null);
-            }
+        const updated = removeChatMessageLike(state, messageId, userId, getCurrentTimestamp());
+        if (updated) {
+            executeChatUpdates(state.chatId, state.participants, state.updatedAt);
+            return Result.ok(null);
+        } else {
+            return Result.err("Message not found");
         }
-        return Result.err("Message not found");
     }
 
     override async saveSnapshot(): Promise<Uint8Array> {

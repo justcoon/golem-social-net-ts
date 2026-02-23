@@ -35,6 +35,68 @@ export interface UserChatsUpdates {
     chats: ChatRef[];
 }
 
+export function initUserChatsState(userId: string, now: Timestamp): UserChats {
+    return {
+        userId,
+        chats: [],
+        createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function addUserChat(state: UserChats, chatId: string, createdBy: string, now: Timestamp): ChatRef {
+    const chatRef: ChatRef = {
+        chatId,
+        createdBy,
+        createdAt: now,
+        updatedAt: now
+    };
+
+    state.updatedAt = now;
+    state.chats.push(chatRef);
+    state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
+
+    if (state.chats.length > CHATS_MAX_COUNT) {
+        state.chats = state.chats.slice(0, CHATS_MAX_COUNT);
+    }
+    return chatRef;
+}
+
+export function updateUserChat(state: UserChats, chatId: string, updatedAt: Timestamp): Result<null, string> {
+    const chatIdx = state.chats.findIndex(c => c.chatId === chatId);
+    if (chatIdx !== -1) {
+        state.chats[chatIdx]!.updatedAt = updatedAt;
+        state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
+        state.updatedAt = getCurrentTimestamp();
+        return Result.ok(null);
+    } else {
+        return Result.err("Chat not found");
+    }
+}
+
+export function addExistingChat(state: UserChats, chatId: string, createdBy: string, createdAt: Timestamp, now: Timestamp): void {
+    if (!state.chats.find(c => c.chatId === chatId)) {
+        state.chats.push({
+            chatId,
+            createdBy,
+            createdAt: createdAt,
+            updatedAt: now
+        });
+
+        state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
+
+        if (state.chats.length > CHATS_MAX_COUNT) {
+            state.chats = state.chats.slice(0, CHATS_MAX_COUNT);
+        }
+        state.updatedAt = now;
+    }
+}
+
+export function removeUserChat(state: UserChats, chatId: string, now: Timestamp): void {
+    state.chats = state.chats.filter(c => c.chatId !== chatId);
+    state.updatedAt = now;
+}
+
 @agent()
 export class UserChatsAgent extends BaseAgent {
     private readonly _id: string;
@@ -47,13 +109,7 @@ export class UserChatsAgent extends BaseAgent {
 
     private getState(): UserChats {
         if (this.state === null) {
-            const now = getCurrentTimestamp();
-            this.state = {
-                userId: this._id,
-                chats: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            this.state = initUserChatsState(this._id, getCurrentTimestamp());
         }
         return this.state;
     }
@@ -72,20 +128,7 @@ export class UserChatsAgent extends BaseAgent {
         console.log(`create chat - chat id: ${chatId}, created by: ${state.userId}, participants: ${participantsIds.length}`);
 
         const now = getCurrentTimestamp();
-        const chatRef: ChatRef = {
-            chatId,
-            createdBy: state.userId,
-            createdAt: now,
-            updatedAt: now
-        };
-
-        state.updatedAt = now;
-        state.chats.push(chatRef);
-        state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
-
-        if (state.chats.length > CHATS_MAX_COUNT) {
-            state.chats = state.chats.slice(0, CHATS_MAX_COUNT);
-        }
+        addUserChat(state, chatId, state.userId, now);
 
         // Trigger chat initialization
         ChatAgent.get(chatId).initChat.trigger(participantsIds, state.userId, now);
@@ -115,15 +158,12 @@ export class UserChatsAgent extends BaseAgent {
         const state = this.getState();
         console.log(`chat updated - chat id: ${chatId}, updated at: ${updatedAt.timestamp}`);
 
-        const chatIdx = state.chats.findIndex(c => c.chatId === chatId);
-        if (chatIdx !== -1) {
-            state.chats[chatIdx]!.updatedAt = updatedAt;
-            state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
-            state.updatedAt = getCurrentTimestamp();
+        const result = updateUserChat(state, chatId, updatedAt);
+        if (result.isOk()) {
             return Result.ok(null);
         } else {
             console.log(`chat updated - chat id: ${chatId} - chat not found`);
-            return Result.err("Chat not found");
+            return result;
         }
     }
 
@@ -132,22 +172,7 @@ export class UserChatsAgent extends BaseAgent {
     async addChat(chatId: string, createdBy: string, createdAt: Timestamp): Promise<Result<null, string>> {
         const state = this.getState();
         console.log(`add chat - chat id: ${chatId}, created by: ${createdBy}, created at: ${createdAt.timestamp}`);
-
-        if (!state.chats.find(c => c.chatId === chatId)) {
-            state.chats.push({
-                chatId,
-                createdBy,
-                createdAt: createdAt,
-                updatedAt: getCurrentTimestamp()
-            });
-
-            state.chats.sort((a, b) => b.updatedAt.timestamp.localeCompare(a.updatedAt.timestamp));
-
-            if (state.chats.length > CHATS_MAX_COUNT) {
-                state.chats = state.chats.slice(0, CHATS_MAX_COUNT);
-            }
-            state.updatedAt = getCurrentTimestamp();
-        }
+        addExistingChat(state, chatId, createdBy, createdAt, getCurrentTimestamp());
         return Result.ok(null);
     }
 
@@ -156,8 +181,7 @@ export class UserChatsAgent extends BaseAgent {
     async removeChat(chatId: string): Promise<Result<null, string>> {
         const state = this.getState();
         console.log(`remove chat - chat id: ${chatId}`);
-        state.chats = state.chats.filter(c => c.chatId !== chatId);
-        state.updatedAt = getCurrentTimestamp();
+        removeUserChat(state, chatId, getCurrentTimestamp());
         return Result.ok(null);
     }
 

@@ -9,11 +9,11 @@ import {
     getSelfMetadata
 } from '@golemcloud/golem-ts-sdk';
 
-import {ComponentId} from '@golemcloud/golem-ts-sdk';
-import {getOppositeConnectionType, UserConnectionType, Timestamp} from '../common/types';
-import {serialize, deserialize} from '../common/snapshot';
-import {Query, optTextMatches, textExactMatches} from '../common/query';
-import {arrayChunks, getCurrentTimestamp} from '../common/utils';
+import { ComponentId } from '@golemcloud/golem-ts-sdk';
+import { getOppositeConnectionType, UserConnectionType, Timestamp } from '../common/types';
+import { serialize, deserialize } from '../common/snapshot';
+import { Query, optTextMatches, textExactMatches } from '../common/query';
+import { arrayChunks, getCurrentTimestamp } from '../common/utils';
 
 export interface ConnectedUser {
     userId: string;
@@ -31,6 +31,85 @@ export interface User {
     updatedAt: Timestamp;
 }
 
+export function initUserState(userId: string, now: Timestamp): User {
+    return {
+        userId,
+        name: null,
+        email: null,
+        connectedUsers: [],
+        createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function setUserAgentName(user: User, name: string | null, now: Timestamp): void {
+    user.name = name;
+    user.updatedAt = now;
+}
+
+export function setUserAgentEmail(user: User, email: string | null, now: Timestamp): Result<null, string> {
+    if (email !== null) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return Result.err(`Invalid email`);
+        }
+    }
+    user.email = email;
+    user.updatedAt = now;
+    return Result.ok(null);
+}
+
+export function connectUserAgent(user: User, userId: string, connectionType: UserConnectionType, now: Timestamp): boolean {
+    if (userId === user.userId) {
+        return false;
+    }
+
+    let existingIdx = user.connectedUsers.findIndex(u => u[0] === userId);
+    let existingConnection = existingIdx !== -1 ? user.connectedUsers[existingIdx]![1] : undefined;
+
+    let shouldConnect = !existingConnection || !existingConnection.connectionTypes.includes(connectionType);
+
+    if (shouldConnect) {
+        if (existingConnection) {
+            existingConnection.connectionTypes.push(connectionType);
+            existingConnection.updatedAt = now;
+        } else {
+            user.connectedUsers.push([userId, {
+                userId: userId,
+                connectionTypes: [connectionType],
+                createdAt: now,
+                updatedAt: now
+            }]);
+        }
+        user.updatedAt = now;
+        return true;
+    }
+    return false;
+}
+
+export function disconnectUserAgent(user: User, userId: string, connectionType: UserConnectionType, now: Timestamp): boolean {
+    if (userId === user.userId) {
+        return false;
+    }
+
+    let existingIdx = user.connectedUsers.findIndex(u => u[0] === userId);
+    let existingConnection = existingIdx !== -1 ? user.connectedUsers[existingIdx]![1] : undefined;
+
+    let shouldDisconnect = existingConnection !== undefined && existingConnection.connectionTypes.includes(connectionType);
+
+    if (shouldDisconnect) {
+        if (existingConnection!.connectionTypes.length === 1) {
+            user.connectedUsers.splice(existingIdx, 1);
+        } else {
+            existingConnection!.connectionTypes = existingConnection!.connectionTypes.filter(c => c !== connectionType);
+            existingConnection!.updatedAt = now;
+        }
+        user.updatedAt = now;
+        return true;
+    }
+    return false;
+}
+
 @agent()
 export class UserAgent extends BaseAgent {
     private readonly _id: string;
@@ -43,15 +122,7 @@ export class UserAgent extends BaseAgent {
 
     private getState(): User {
         if (this.state === null) {
-            const now = getCurrentTimestamp();
-            this.state = {
-                userId: this._id,
-                name: null,
-                email: null,
-                connectedUsers: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            this.state = initUserState(this._id, getCurrentTimestamp());
         }
         return this.state;
     }
@@ -66,9 +137,7 @@ export class UserAgent extends BaseAgent {
     @description("Sets the user name")
     async setName(name: string | null): Promise<Result<null, string>> {
         console.log(`set name: ${name ?? "N/A"}`);
-        const state = this.getState();
-        state.name = name;
-        state.updatedAt = getCurrentTimestamp();
+        setUserAgentName(this.getState(), name, getCurrentTimestamp());
         return Result.ok(null);
     }
 
@@ -76,48 +145,16 @@ export class UserAgent extends BaseAgent {
     @description("Sets the user email")
     async setEmail(email: string | null): Promise<Result<null, string>> {
         console.log(`set email: ${email ?? "N/A"}`);
-        if (email !== null) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                return Result.err(`Invalid email`);
-            }
-        }
-        const state = this.getState();
-        state.email = email;
-        state.updatedAt = getCurrentTimestamp();
-        return Result.ok(null);
+        return setUserAgentEmail(this.getState(), email, getCurrentTimestamp());
     }
 
     @prompt("Connect with a user")
     @description("Connects with a given user via a connection type")
     async connectUser(userId: string, connectionType: UserConnectionType): Promise<Result<null, string>> {
         const state = this.getState();
-        if (userId === state.userId) {
-            console.log(`connect user - id: ${userId}, type: ${connectionType} - connection already exists or invalid`);
-            return Result.ok(null);
-        }
-
-        let existingIdx = state.connectedUsers.findIndex(u => u[0] === userId);
-        let existingConnection = existingIdx !== -1 ? state.connectedUsers[existingIdx]![1] : undefined;
-
-        let shouldConnect = !existingConnection || !existingConnection.connectionTypes.includes(connectionType);
-
-        if (shouldConnect) {
+        const updated = connectUserAgent(state, userId, connectionType, getCurrentTimestamp());
+        if (updated) {
             console.log(`connect user - id: ${userId}, type: ${connectionType}`);
-            const now = getCurrentTimestamp();
-            if (existingConnection) {
-                existingConnection.connectionTypes.push(connectionType);
-                existingConnection.updatedAt = now;
-            } else {
-                state.connectedUsers.push([userId, {
-                    userId: userId,
-                    connectionTypes: [connectionType],
-                    createdAt: now,
-                    updatedAt: now
-                }]);
-            }
-            state.updatedAt = now;
-
             UserAgent.get(userId).connectUser.trigger(state.userId, getOppositeConnectionType(connectionType));
         } else {
             console.log(`connect user - id: ${userId}, type: ${connectionType} - connection already exists or invalid`);
@@ -129,26 +166,9 @@ export class UserAgent extends BaseAgent {
     @description("Disconnects connection with a user")
     async disconnectUser(userId: string, connectionType: UserConnectionType): Promise<Result<null, string>> {
         const state = this.getState();
-        if (userId === state.userId) {
-            return Result.ok(null);
-        }
-
-        let existingIdx = state.connectedUsers.findIndex(u => u[0] === userId);
-        let existingConnection = existingIdx !== -1 ? state.connectedUsers[existingIdx]![1] : undefined;
-
-        let shouldDisconnect = existingConnection !== undefined && existingConnection.connectionTypes.includes(connectionType);
-
-        if (shouldDisconnect) {
+        const updated = disconnectUserAgent(state, userId, connectionType, getCurrentTimestamp());
+        if (updated) {
             console.log(`disconnect user - id: ${userId}, type: ${connectionType}`);
-            const now = getCurrentTimestamp();
-            if (existingConnection!.connectionTypes.length === 1) {
-                state.connectedUsers.splice(existingIdx, 1);
-            } else {
-                existingConnection!.connectionTypes = existingConnection!.connectionTypes.filter(c => c !== connectionType);
-                existingConnection!.updatedAt = now;
-            }
-            state.updatedAt = now;
-
             UserAgent.get(userId).disconnectUser.trigger(state.userId, getOppositeConnectionType(connectionType));
         } else {
             console.log(`disconnect user - id: ${userId}, type: ${connectionType} - connection not found or invalid`);
@@ -230,7 +250,7 @@ function getUserAgentId(agentName: string): string | undefined {
 }
 
 
-@agent({mode: "ephemeral"})
+@agent({ mode: "ephemeral" })
 export class UserSearchAgent extends BaseAgent {
     private readonly componentId: ComponentId;
 
