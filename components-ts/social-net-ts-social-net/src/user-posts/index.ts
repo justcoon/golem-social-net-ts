@@ -11,7 +11,7 @@ import { getCurrentTimestamp } from '../common/utils';
 
 import { Query, parseQuery } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
-import { Post, PostAgent, matchesPost, fetchPostsByIds } from '../post/index';
+import { Post, PostAgent, fetchPostsByIds } from '../post/index';
 
 export interface PostRef {
     postId: string;
@@ -120,18 +120,6 @@ export class UserPostsAgent extends BaseAgent {
     }
 }
 
-class PostQueryMatcher {
-    public readonly query: Query;
-
-    constructor(queryStr: string) {
-        this.query = parseQuery(queryStr);
-    }
-
-    public matchesPost(post: Post): boolean {
-        return matchesPost(post, this.query);
-    }
-}
-
 @agent({ mode: "ephemeral" })
 export class UserPostsViewAgent extends BaseAgent {
     constructor() {
@@ -146,16 +134,12 @@ export class UserPostsViewAgent extends BaseAgent {
         console.log(`get posts view - user id: ${userId}, query: ${query}`);
 
         if (userPosts !== null) {
-            const queryMatcher = new PostQueryMatcher(query);
-            const postRefs = userPosts.posts;
-
-            if (postRefs.length === 0) {
+            const parsedQuery = parseQuery(query);
+            const postIds = userPosts.posts.map(p => p.postId);
+            if (postIds.length === 0) {
                 return [];
             } else {
-                const postIds = postRefs.map(p => p.postId);
-                const posts = await fetchPostsByIds(postIds);
-
-                return posts.filter(p => queryMatcher.matchesPost(p));
+                return await fetchPostsByIds(postIds, parsedQuery);
             }
         } else {
             return null;
@@ -170,13 +154,11 @@ export class UserPostsViewAgent extends BaseAgent {
         console.log(`get posts updates view - user id: ${userId}, updates since: ${updatesSince.timestamp}`);
 
         if (userPostsUpdates !== null) {
-            const updatedPostRefs = userPostsUpdates.posts;
-
-            if (updatedPostRefs.length === 0) {
+            const postIds = userPostsUpdates.posts.map(p => p.postId);
+            if (postIds.length === 0) {
                 return [];
             } else {
-                const postIds = updatedPostRefs.map(p => p.postId);
-                return await fetchPostsByIds(postIds);
+                return await fetchPostsByIds(postIds, undefined);
             }
         } else {
             return null;

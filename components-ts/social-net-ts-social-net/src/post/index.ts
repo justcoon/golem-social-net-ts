@@ -36,7 +36,7 @@ export interface Post {
     updatedAt: Timestamp;
 }
 
-export function matchesPost(post: Post, query: Query): boolean {
+export function matchesQuery(post: Post, query: Query): boolean {
     // Check field filters first
     for (const [field, value] of query.fieldFilters) {
         let matches = false;
@@ -310,6 +310,17 @@ export class PostAgent extends BaseAgent {
         return this.state;
     }
 
+    @prompt("Get post if matches query")
+    @description("Returns the post if it matches the query, null otherwise")
+    async getPostIfMatch(query: Query): Promise<Post | null> {
+        const post = this.state;
+        if (!post) {
+            return null;
+        }
+        
+        return matchesQuery(post, query) ? post : null;
+    }
+
     @prompt("Initialize the post")
     @description("Initializes a new post with content and author")
     async initPost(createdBy: string, content: string): Promise<Result<null, string>> {
@@ -415,12 +426,12 @@ export class PostAgent extends BaseAgent {
     }
 }
 
-export async function fetchPostsByIds(postIds: string[]): Promise<Post[]> {
+export async function fetchPostsByIds(postIds: string[], query?: Query): Promise<Post[]> {
     const results: Post[] = [];
     const chunks = arrayChunks(postIds, 10);
 
     for (const chunk of chunks) {
-        const promises = chunk.map(id => PostAgent.get(id).getPost());
+        const promises = chunk.map(id => query ? PostAgent.get(id).getPostIfMatch(query) : PostAgent.get(id).getPost());
         const postsOptions = await Promise.all(promises);
         for (const p of postsOptions) {
             if (p) {

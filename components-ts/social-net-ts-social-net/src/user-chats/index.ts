@@ -6,7 +6,7 @@ import {
     description,
 } from '@golemcloud/golem-ts-sdk';
 
-import { Query, parseQuery, optTextExactMatches, textExactMatches, textMatches } from '../common/query';
+import { Query, parseQuery, textExactMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
 import { Timestamp } from '../common/types';
 import { getCurrentTimestamp } from '../common/utils';
@@ -197,12 +197,14 @@ export class UserChatsAgent extends BaseAgent {
     }
 }
 
-async function fetchChatsByIds(chatIds: string[]): Promise<Chat[]> {
+async function fetchChatsByIds(chatIds: string[], query?: Query): Promise<Chat[]> {
     const results: Chat[] = [];
     const chunks = arrayChunks(chatIds, 10);
 
     for (const chunk of chunks) {
-        const promises = chunk.map(id => ChatAgent.get(id).getChat());
+        const promises = chunk.map(id => 
+            query ? ChatAgent.get(id).getChatIfMatch(query) : ChatAgent.get(id).getChat()
+        );
         const chatsOptions = await Promise.all(promises);
         for (const c of chatsOptions) {
             if (c) {
@@ -214,64 +216,28 @@ async function fetchChatsByIds(chatIds: string[]): Promise<Chat[]> {
     return results;
 }
 
-class ChatQueryMatcher {
-    public readonly query: Query;
-
-    constructor(queryStr: string) {
-        this.query = parseQuery(queryStr);
-    }
-
-    public matchesChatRef(chatRef: ChatRef): boolean {
-        for (const [field, value] of this.query.fieldFilters) {
-            let matches = false;
-            switch (field.toLowerCase()) {
-                case "created-by":
-                case "createdby":
-                    matches = textExactMatches(chatRef.createdBy, value);
-                    break;
-                case "participants":
-                case "content":
-                    matches = true;
-                    break;
-                default:
-                    matches = false;
-            }
-            if (!matches) {
-                return false;
-            }
+function matchesChatRef(chatRef: ChatRef, query: Query): boolean {
+    for (const [field, value] of query.fieldFilters) {
+        let matches = false;
+        switch (field.toLowerCase()) {
+            case "created-by":
+            case "createdby":
+                matches = textExactMatches(chatRef.createdBy, value);
+                break;
+            case "participants":
+            case "content":
+                matches = true;
+                break;
+            default:
+                matches = false;
         }
-        return true;
-    }
-
-    public matchesChat(chat: Chat): boolean {
-        for (const [field, value] of this.query.fieldFilters) {
-            let matches = false;
-            switch (field.toLowerCase()) {
-                case "content":
-                    matches = chat.messages.some(m => textMatches(m.content, value));
-                    break;
-                case "created-by":
-                case "createdby":
-                    matches = textExactMatches(chat.createdBy, value);
-                    break;
-                case "participants":
-                    matches = chat.participants.some(p => textExactMatches(p, value));
-                    break;
-                default:
-                    matches = false;
-            }
-            if (!matches) {
-                return false;
-            }
+        if (!matches) {
+            return false;
         }
-
-        return this.query.terms.length === 0 || this.query.terms.some(term => {
-            const matchesContent = chat.messages.some(m => textMatches(m.content, term));
-            const matchesParticipants = chat.participants.some(p => textExactMatches(p, term));
-            return matchesContent || matchesParticipants;
-        });
     }
+    return true;
 }
+
 
 @agent({ mode: "ephemeral" })
 export class UserChatsViewAgent extends BaseAgent {
@@ -287,17 +253,16 @@ export class UserChatsViewAgent extends BaseAgent {
         console.log(`get chats view - user id: ${userId}, query: ${query}`);
 
         if (userChats !== null) {
-            const queryMatcher = new ChatQueryMatcher(query);
+            const parsedQuery = parseQuery(query);
             const chatRefs = userChats.chats;
+            const chatIds = chatRefs
+                .filter(chatRef => matchesChatRef(chatRef, parsedQuery))
+                .map(p => p.chatId);
 
-            if (chatRefs.length === 0) {
+            if (chatIds.length === 0) {
                 return [];
             } else {
-                const validRefs = chatRefs.filter(p => queryMatcher.matchesChatRef(p));
-                const chatIds = validRefs.map(p => p.chatId);
-                const chats = await fetchChatsByIds(chatIds);
-
-                return chats.filter(p => queryMatcher.matchesChat(p));
+                return await fetchChatsByIds(chatIds, parsedQuery);
             }
         } else {
             return null;

@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { LikeType, Timestamp } from '../common/types';
 import { serialize, deserialize } from '../common/snapshot';
 import { getCurrentTimestamp } from '../common/utils';
+import { Query, optTextMatches, textExactMatches } from '../common/query';
 import { UserChatsAgent } from "../user-chats";
 
 const MAX_CHAT_LENGTH = 2000;
@@ -133,6 +134,36 @@ export function removeChatMessageLike(chat: Chat, messageId: string, userId: str
     return false;
 }
 
+export function matchesQuery(chat: Chat, query: Query): boolean {
+    for (const [field, value] of query.fieldFilters) {
+        let matches = false;
+        switch (field.toLowerCase()) {
+            case "chat-id":
+            case "chatid":
+                matches = textExactMatches(chat.chatId, value);
+                break;
+            case "created-by":
+            case "createdby":
+                matches = textExactMatches(chat.createdBy, value);
+                break;
+            case "participants":
+                matches = chat.participants.some((p) => textExactMatches(p, value));
+                break;
+            default:
+                matches = false;
+        }
+        if (!matches) {
+            return false;
+        }
+    }
+
+    return query.terms.length === 0 || query.terms.some((term: string) =>
+        textExactMatches(chat.chatId, term) ||
+        textExactMatches(chat.createdBy, term) ||
+        chat.participants.some((p) => textExactMatches(p, term))
+    );
+}
+
 @agent()
 export class ChatAgent extends BaseAgent {
     private readonly _id: string;
@@ -154,6 +185,17 @@ export class ChatAgent extends BaseAgent {
     @description("Returns the chat details")
     async getChat(): Promise<Chat | null> {
         return this.state;
+    }
+
+    @prompt("Get chat if matches query")
+    @description("Returns the chat if it matches the query, null otherwise")
+    async getChatIfMatch(query: Query): Promise<Chat | null> {
+        const chat = this.state;
+        if (!chat) {
+            return null;
+        }
+        
+        return matchesQuery(chat, query) ? chat : null;
     }
 
     @prompt("Initialize the chat")

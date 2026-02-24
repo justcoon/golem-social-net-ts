@@ -6,12 +6,12 @@ import {
     description,
 } from '@golemcloud/golem-ts-sdk';
 
-import { UserConnectionType, Timestamp } from '../common/types';
-import { Query, parseQuery, optTextExactMatches, textExactMatches } from '../common/query';
-import { serialize, deserialize } from '../common/snapshot';
-import { getCurrentTimestamp } from '../common/utils';
-import { pollForUpdates } from '../common/poll';
-import { Post, PostAgent, matchesPost, fetchPostsByIds } from '../post/index';
+import {UserConnectionType, Timestamp} from '../common/types';
+import {Query, parseQuery, optTextExactMatches, textExactMatches} from '../common/query';
+import {serialize, deserialize} from '../common/snapshot';
+import {getCurrentTimestamp} from '../common/utils';
+import {pollForUpdates} from '../common/poll';
+import {Post, fetchPostsByIds} from '../post/index';
 
 const POSTS_MAX_COUNT = 500;
 
@@ -119,44 +119,32 @@ export class UserTimelineAgent extends BaseAgent {
     }
 }
 
-class PostQueryMatcher {
-    public readonly query: Query;
-
-    constructor(queryStr: string) {
-        this.query = parseQuery(queryStr);
-    }
-
-    public matchesPostRef(postRef: PostRef): boolean {
-        for (const [field, value] of this.query.fieldFilters) {
-            let matches = false;
-            switch (field.toLowerCase()) {
-                case "connection-type":
-                case "connectiontype":
-                    matches = optTextExactMatches(postRef.createdByConnectionType, value);
-                    break;
-                case "created-by":
-                case "createdby":
-                    matches = textExactMatches(postRef.createdBy, value);
-                    break;
-                case "content":
-                    matches = true;
-                    break;
-                default:
-                    matches = false;
-            }
-            if (!matches) {
-                return false;
-            }
+function matchesPostRef(postRef: PostRef, query: Query): boolean {
+    for (const [field, value] of query.fieldFilters) {
+        let matches = false;
+        switch (field.toLowerCase()) {
+            case "connection-type":
+            case "connectiontype":
+                matches = optTextExactMatches(postRef.createdByConnectionType, value);
+                break;
+            case "created-by":
+            case "createdby":
+                matches = textExactMatches(postRef.createdBy, value);
+                break;
+            case "content":
+                matches = true;
+                break;
+            default:
+                matches = false;
         }
-        return true;
+        if (!matches) {
+            return false;
+        }
     }
-
-    public matchesPost(post: Post): boolean {
-        return matchesPost(post, this.query);
-    }
+    return true;
 }
 
-@agent({ mode: "ephemeral" })
+@agent({mode: "ephemeral"})
 export class UserTimelineViewAgent extends BaseAgent {
     constructor() {
         super();
@@ -170,18 +158,16 @@ export class UserTimelineViewAgent extends BaseAgent {
         console.log(`get posts view - user id: ${userId}, query: ${query}`);
 
         if (timelinePosts !== null) {
-            const queryMatcher = new PostQueryMatcher(query);
+            const parsedQuery = parseQuery(query);
 
             const postIds = timelinePosts.posts
-                .filter(p => queryMatcher.matchesPostRef(p))
+                .filter(p => matchesPostRef(p, parsedQuery))
                 .map(p => p.postId);
 
             if (postIds.length === 0) {
                 return [];
             } else {
-                const posts = await fetchPostsByIds(postIds);
-
-                return posts.filter(p => queryMatcher.matchesPost(p));
+                return await fetchPostsByIds(postIds, parsedQuery);
             }
         } else {
             return null;
@@ -196,13 +182,12 @@ export class UserTimelineViewAgent extends BaseAgent {
         console.log(`get posts updates view - user id: ${userId}, updates since: ${updatesSince.timestamp}`);
 
         if (timelineUpdates !== null) {
-            const updatedPostRefs = timelineUpdates.posts;
+            const postIds = timelineUpdates.posts.map(p => p.postId);
 
-            if (updatedPostRefs.length === 0) {
+            if (postIds.length === 0) {
                 return [];
             } else {
-                const postIds = updatedPostRefs.map(p => p.postId);
-                return await fetchPostsByIds(postIds);
+                return await fetchPostsByIds(postIds, undefined);
             }
         } else {
             return null;
@@ -210,7 +195,7 @@ export class UserTimelineViewAgent extends BaseAgent {
     }
 }
 
-@agent({ mode: "ephemeral" })
+@agent({mode: "ephemeral"})
 export class UserTimelineUpdatesAgent extends BaseAgent {
     constructor() {
         super();
