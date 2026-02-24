@@ -120,6 +120,39 @@ export function disconnectUserAgent(user: User, userId: string, connectionType: 
     return false;
 }
 
+export function matchesQuery(user: User, query: Query): boolean {
+    for (const [field, value] of query.fieldFilters) {
+        let matches = false;
+        switch (field.toLowerCase()) {
+            case "user-id":
+            case "userid":
+                matches = textExactMatches(user.userId, value);
+                break;
+            case "name":
+                matches = optTextMatches(user.name, value);
+                break;
+            case "email":
+                matches = optTextMatches(user.email, value);
+                break;
+            case "connected-users":
+            case "connectedusers":
+                matches = user.connectedUsers.some((u) => textExactMatches(u[0], value));
+                break;
+            default:
+                matches = false;
+        }
+        if (!matches) {
+            return false;
+        }
+    }
+
+    return query.terms.length === 0 || query.terms.some((term: string) =>
+        textExactMatches(user.userId, term) ||
+        optTextMatches(user.name, term) ||
+        optTextMatches(user.email, term)
+    );
+}
+
 @agent()
 export class UserAgent extends BaseAgent {
     private readonly _id: string;
@@ -143,6 +176,17 @@ export class UserAgent extends BaseAgent {
     @description("Returns the user details")
     async getUser(): Promise<User | null> {
         return this.state;
+    }
+
+    @prompt("Get user if matches query")
+    @description("Returns the user if it matches the query, null otherwise")
+    async getUserIfMatch(query: Query): Promise<User | null> {
+        const user = this.state;
+        if (!user) {
+            return null;
+        }
+        
+        return matchesQuery(user, query) ? user : null;
     }
 
     @prompt("Set the user name")
@@ -226,57 +270,15 @@ export class UserIndexAgent extends BaseAgent {
     }
 }
 
-class UserQueryMatcher {
-    public readonly query: Query;
-
-    constructor(queryStr: string) {
-        this.query = parseQuery(queryStr);
-    }
-
-    public matches(user: User): boolean {
-        for (const [field, value] of this.query.fieldFilters) {
-            let matches = false;
-            switch (field.toLowerCase()) {
-                case "user-id":
-                case "userid":
-                    matches = textExactMatches(user.userId, value);
-                    break;
-                case "name":
-                    matches = optTextMatches(user.name, value);
-                    break;
-                case "email":
-                    matches = optTextMatches(user.email, value);
-                    break;
-                case "connected-users":
-                case "connectedusers":
-                    matches = user.connectedUsers.some((u) => textExactMatches(u[0], value));
-                    break;
-                default:
-                    matches = false;
-            }
-            if (!matches) {
-                return false;
-            }
-        }
-
-        return this.query.terms.length === 0 || this.query.terms.some((term: string) =>
-            textExactMatches(user.userId, term) ||
-            optTextMatches(user.name, term) ||
-            optTextMatches(user.email, term)
-        );
-    }
-}
-
 @agent({ mode: "ephemeral" })
 export class UserSearchAgent extends BaseAgent {
     @prompt("Search users")
     @description("Searches for users using UserIndexAgent")
     async search(query: string): Promise<User[]> {
         console.log("Search users - query: " + query);
-        const matcher = new UserQueryMatcher(query);
+        const parsedQuery = parseQuery(query);
 
         const result: User[] = [];
-        const processedIds = new Set<string>();
 
         // Get user IDs from UserIndexAgent
         const userIndex = UserIndexAgent.get();
@@ -289,15 +291,12 @@ export class UserSearchAgent extends BaseAgent {
             for (const ids of idsChunks) {
                 console.log("Search users - ids: (" + ids + ")");
 
-                const promises = ids.map(async (id) => await UserAgent.get(id).getUser());
+                const promises = ids.map(async (id) => await UserAgent.get(id).getUserIfMatch(parsedQuery));
                 const promisesResult = await Promise.all(promises);
 
                 for (const value of promisesResult) {
                     if (value) {
-                        processedIds.add(value.userId);
-                        if (matcher.matches(value)) {
-                            result.push(value);
-                        }
+                        result.push(value);
                     }
                 }
             }
