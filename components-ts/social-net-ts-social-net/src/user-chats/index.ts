@@ -6,7 +6,7 @@ import {
     description,
 } from '@golemcloud/golem-ts-sdk';
 
-import { Query, optTextExactMatches, textExactMatches, textMatches } from '../common/query';
+import { Query, parseQuery, optTextExactMatches, textExactMatches, textMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
 import { Timestamp } from '../common/types';
 import { getCurrentTimestamp } from '../common/utils';
@@ -218,7 +218,7 @@ class ChatQueryMatcher {
     public readonly query: Query;
 
     constructor(queryStr: string) {
-        this.query = new Query(queryStr);
+        this.query = parseQuery(queryStr);
     }
 
     public matchesChatRef(chatRef: ChatRef): boolean {

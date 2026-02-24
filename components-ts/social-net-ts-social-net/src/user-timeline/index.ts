@@ -7,7 +7,7 @@ import {
 } from '@golemcloud/golem-ts-sdk';
 
 import { UserConnectionType, Timestamp } from '../common/types';
-import { Query, optTextExactMatches, textExactMatches } from '../common/query';
+import { Query, parseQuery, optTextExactMatches, textExactMatches } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
 import { getCurrentTimestamp } from '../common/utils';
 import { pollForUpdates } from '../common/poll';
@@ -123,7 +123,7 @@ class PostQueryMatcher {
     public readonly query: Query;
 
     constructor(queryStr: string) {
-        this.query = new Query(queryStr);
+        this.query = parseQuery(queryStr);
     }
 
     public matchesPostRef(postRef: PostRef): boolean {

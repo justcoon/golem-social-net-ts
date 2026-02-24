@@ -39,29 +39,27 @@ export function tokenize(query: string): string[] {
     return tokens;
 }
 
-export class Query {
-    public readonly terms: string[];
-    public readonly fieldFilters: [string, string][];
+export interface Query {
+    terms: string[];
+    fieldFilters: [string, string][];
+}
 
-    constructor(query: string) {
-        this.terms = [];
-        this.fieldFilters = [];
+export function parseQuery(query: string): Query {
+    const terms: string[] = [];
+    const fieldFilters: [string, string][] = [];
 
-        const tokens = tokenize(query);
+    const tokens = tokenize(query);
 
-        for (const part of tokens) {
-            const splitIndex = part.indexOf(':');
-            if (splitIndex !== -1) {
-                const field = part.substring(0, splitIndex).toLowerCase();
-                const value = part.substring(splitIndex + 1);
-                this.fieldFilters.push([field, value]);
-            } else {
-                this.terms.push(part);
-            }
+    for (const part of tokens) {
+        const splitIndex = part.indexOf(':');
+        if (splitIndex !== -1) {
+            const field = part.substring(0, splitIndex).toLowerCase();
+            const value = part.substring(splitIndex + 1);
+            fieldFilters.push([field, value]);
+        } else {
+            terms.push(part);
         }
     }
 
-    public toString(): string {
-        return `Query(terms: ${JSON.stringify(this.terms)}, fieldFilters: ${JSON.stringify(this.fieldFilters)})`;
-    }
+    return { terms, fieldFilters };
 }

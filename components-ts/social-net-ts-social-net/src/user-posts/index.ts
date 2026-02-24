@@ -9,7 +9,7 @@ import {
 import { Timestamp } from '../common/types';
 import { getCurrentTimestamp } from '../common/utils';
 
-import { Query } from '../common/query';
+import { Query, parseQuery } from '../common/query';
 import { serialize, deserialize } from '../common/snapshot';
 import { Post, PostAgent, matchesPost, fetchPostsByIds } from '../post/index';
 
@@ -124,7 +124,7 @@ class PostQueryMatcher {
     public readonly query: Query;
 
     constructor(queryStr: string) {
-        this.query = new Query(queryStr);
+        this.query = parseQuery(queryStr);
     }
 
     public matchesPost(post: Post): boolean {

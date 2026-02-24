@@ -4,16 +4,13 @@ import {
     agent,
     prompt,
     description,
-    GetAgents,
-    AgentAnyFilter,
-    getSelfMetadata
 } from '@golemcloud/golem-ts-sdk';
 
-import { ComponentId } from '@golemcloud/golem-ts-sdk';
 import { getOppositeConnectionType, UserConnectionType, Timestamp } from '../common/types';
 import { serialize, deserialize } from '../common/snapshot';
-import { Query, optTextMatches, textExactMatches } from '../common/query';
-import { arrayChunks, getCurrentTimestamp } from '../common/utils';
+import { getCurrentTimestamp } from '../common/utils';
+import { Query, parseQuery, optTextMatches, textExactMatches } from '../common/query';
+import { arrayChunks } from '../common/utils';
 
 export interface ConnectedUser {
     userId: string;
@@ -31,6 +28,11 @@ export interface User {
     updatedAt: Timestamp;
 }
 
+export interface UserIndexState {
+    userIds: string[];
+    updatedAt: Timestamp;
+}
+
 export function initUserState(userId: string, now: Timestamp): User {
     return {
         userId,
@@ -38,6 +40,14 @@ export function initUserState(userId: string, now: Timestamp): User {
         email: null,
         connectedUsers: [],
         createdAt: now,
+        updatedAt: now
+    };
+}
+
+export function initUserIndexState(): UserIndexState {
+    const now = getCurrentTimestamp();
+    return {
+        userIds: [],
         updatedAt: now
     };
 }
@@ -123,6 +133,8 @@ export class UserAgent extends BaseAgent {
     private getState(): User {
         if (this.state === null) {
             this.state = initUserState(this._id, getCurrentTimestamp());
+            // Add user ID to index when user is created
+            UserIndexAgent.get().add.trigger(this._id);
         }
         return this.state;
     }
@@ -188,11 +200,37 @@ export class UserAgent extends BaseAgent {
     }
 }
 
+@agent()
+export class UserIndexAgent extends BaseAgent {
+    private state: UserIndexState;
+
+    constructor() {
+        super();
+        this.state = initUserIndexState();
+    }
+
+    @prompt("Add user ID to index")
+    @description("Adds a user ID to the user index")
+    async add(userId: string): Promise<void> {
+        console.log(`Adding user ID to index: ${userId}`);
+        if (!this.state.userIds.includes(userId)) {
+            this.state.userIds.push(userId);
+            this.state.updatedAt = getCurrentTimestamp();
+        }
+    }
+
+    @prompt("Get user index state")
+    @description("Returns the current state of the user index")
+    async getState(): Promise<UserIndexState> {
+        return this.state;
+    }
+}
+
 class UserQueryMatcher {
     public readonly query: Query;
 
     constructor(queryStr: string) {
-        this.query = new Query(queryStr);
+        this.query = parseQuery(queryStr);
     }
 
     public matches(user: User): boolean {
@@ -229,77 +267,43 @@ class UserQueryMatcher {
     }
 }
 
-const USER_AGENT_FILTER: AgentAnyFilter = {
-    filters: [{
-        filters: [
-            {
-                tag: "name",
-                val: {
-                    comparator: "starts-with",
-                    value: "user-agent("
-                }
-            }
-        ]
-    }]
-}
-
-function getUserAgentId(agentName: string): string | undefined {
-    // parseAgentId(agentName)
-    const match = agentName.match(/^user-agent\("([^"]+)"\)$/);
-    return match ? match[1] : undefined;
-}
-
-
 @agent({ mode: "ephemeral" })
 export class UserSearchAgent extends BaseAgent {
-    private readonly componentId: ComponentId;
-
-    constructor() {
-        super();
-        this.componentId = getSelfMetadata().agentId.componentId;
-    }
-
     @prompt("Search users")
-    @description("Searches for users using discovery")
-    async search(query: string): Promise<Result<User[], string>> {
+    @description("Searches for users using UserIndexAgent")
+    async search(query: string): Promise<User[]> {
         console.log("Search users - query: " + query);
         const matcher = new UserQueryMatcher(query);
 
         const result: User[] = [];
         const processedIds = new Set<string>();
 
-        const getter = new GetAgents(this.componentId, USER_AGENT_FILTER, true);
-        let agents = await getter.getNext();
+        // Get user IDs from UserIndexAgent
+        const userIndex = UserIndexAgent.get();
+        const userIndexState = await userIndex.getState();
+        const userIds = userIndexState.userIds;
 
-        while (agents && agents.length > 0) {
+        if (userIds.length > 0) {
+            const idsChunks = arrayChunks(userIds, 5);
 
-            const ids = agents.map((value) => getUserAgentId(value.agentId.agentId))
-                .filter((id) => id !== undefined)
-                .filter((id) => !processedIds.has(id));
+            for (const ids of idsChunks) {
+                console.log("Search users - ids: (" + ids + ")");
 
-            if (ids.length > 0) {
-                const idsChunks = arrayChunks(ids, 5);
+                const promises = ids.map(async (id) => await UserAgent.get(id).getUser());
+                const promisesResult = await Promise.all(promises);
 
-                for (const ids of idsChunks) {
-                    console.log("Search users - ids: (" + ids + ")");
-
-                    const promises = ids.map(async (id) => await UserAgent.get(id).getUser());
-                    const promisesResult = await Promise.all(promises);
-
-                    for (const value of promisesResult) {
-                        if (value) {
-                            processedIds.add(value.userId);
-                            if (matcher.matches(value)) {
-                                result.push(value);
-                            }
+                for (const value of promisesResult) {
+                    if (value) {
+                        processedIds.add(value.userId);
+                        if (matcher.matches(value)) {
+                            result.push(value);
                         }
                     }
                 }
             }
-
-            agents = await getter.getNext();
         }
 
-        return Result.ok(result);
+        return result;
     }
 }
+
