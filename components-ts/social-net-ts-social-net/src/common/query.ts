@@ -1,65 +1,78 @@
-export function optTextMatches(text: string | null | undefined, query: string): boolean {
-    return query === "*" || (text !== null && text !== undefined && text.toLowerCase().includes(query.toLowerCase()));
+export function optTextMatches(
+  text: string | null | undefined,
+  query: string,
+): boolean {
+  return (
+    query === "*" ||
+    (text !== null &&
+      text !== undefined &&
+      text.toLowerCase().includes(query.toLowerCase()))
+  );
 }
 
-export function optTextExactMatches(text: string | null | undefined, query: string): boolean {
-    return query === "*" || (text !== null && text !== undefined && text === query);
+export function optTextExactMatches(
+  text: string | null | undefined,
+  query: string,
+): boolean {
+  return (
+    query === "*" || (text !== null && text !== undefined && text === query)
+  );
 }
 
 export function textMatches(text: string, query: string): boolean {
-    return query === "*" || text.toLowerCase().includes(query.toLowerCase());
+  return query === "*" || text.toLowerCase().includes(query.toLowerCase());
 }
 
 export function textExactMatches(text: string, query: string): boolean {
-    return query === "*" || text === query;
+  return query === "*" || text === query;
 }
 
 export function tokenize(query: string): string[] {
-    const tokens: string[] = [];
-    let current = "";
-    let inQuotes = false;
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
 
-    for (const c of query) {
-        if (c === " " && !inQuotes) {
-            if (current.length > 0) {
-                tokens.push(current.trim());
-                current = "";
-            }
-        } else if (c === '"') {
-            inQuotes = !inQuotes;
-        } else {
-            current += c;
-        }
-    }
-
-    if (current.length > 0) {
+  for (const c of query) {
+    if (c === " " && !inQuotes) {
+      if (current.length > 0) {
         tokens.push(current.trim());
+        current = "";
+      }
+    } else if (c === '"') {
+      inQuotes = !inQuotes;
+    } else {
+      current += c;
     }
+  }
 
-    return tokens;
+  if (current.length > 0) {
+    tokens.push(current.trim());
+  }
+
+  return tokens;
 }
 
 export interface Query {
-    terms: string[];
-    fieldFilters: [string, string][];
+  terms: string[];
+  fieldFilters: [string, string][];
 }
 
 export function parseQuery(query: string): Query {
-    const terms: string[] = [];
-    const fieldFilters: [string, string][] = [];
+  const terms: string[] = [];
+  const fieldFilters: [string, string][] = [];
 
-    const tokens = tokenize(query);
+  const tokens = tokenize(query);
 
-    for (const part of tokens) {
-        const splitIndex = part.indexOf(':');
-        if (splitIndex !== -1) {
-            const field = part.substring(0, splitIndex).toLowerCase();
-            const value = part.substring(splitIndex + 1);
-            fieldFilters.push([field, value]);
-        } else {
-            terms.push(part);
-        }
+  for (const part of tokens) {
+    const splitIndex = part.indexOf(":");
+    if (splitIndex !== -1) {
+      const field = part.substring(0, splitIndex).toLowerCase();
+      const value = part.substring(splitIndex + 1);
+      fieldFilters.push([field, value]);
+    } else {
+      terms.push(part);
     }
+  }
 
-    return { terms, fieldFilters };
+  return { terms, fieldFilters };
 }

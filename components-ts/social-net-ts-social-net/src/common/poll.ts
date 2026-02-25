@@ -1,44 +1,44 @@
-import { Timestamp } from './types';
-import { getCurrentTimestamp } from './utils';
+import { Timestamp } from "./types";
+import { getCurrentTimestamp } from "./utils";
 
 export async function pollForUpdates<T>(
-    userId: string,
-    updatesSince: Timestamp | undefined,
-    iterWaitTimeMs: number | undefined,
-    maxWaitTimeMs: number | undefined,
-    getUpdatesFn: (id: string, since: Timestamp) => Promise<T[] | undefined>,
-    logPrefix: string
+  userId: string,
+  updatesSince: Timestamp | undefined,
+  iterWaitTimeMs: number | undefined,
+  maxWaitTimeMs: number | undefined,
+  getUpdatesFn: (id: string, since: Timestamp) => Promise<T[] | undefined>,
+  logPrefix: string,
 ): Promise<T[] | undefined> {
-    const since = updatesSince ?? getCurrentTimestamp();
-    const maxWaitTime = maxWaitTimeMs ?? 10000;
-    const iterWaitTime = iterWaitTimeMs ?? 1000;
-    const startTime = Date.now();
-    let done = false;
-    let result: T[] | undefined = undefined;
+  const since = updatesSince ?? getCurrentTimestamp();
+  const maxWaitTime = maxWaitTimeMs ?? 10000;
+  const iterWaitTime = iterWaitTimeMs ?? 1000;
+  const startTime = Date.now();
+  let done = false;
+  let result: T[] | undefined = undefined;
 
-    while (!done) {
-        const elapsedTime = Date.now() - startTime;
-        console.log(
-            `${logPrefix} - user id: ${userId}, updates since: ${since.timestamp}, elapsed time: ${elapsedTime}ms, max wait time: ${maxWaitTime}ms`
-        );
+  while (!done) {
+    const elapsedTime = Date.now() - startTime;
+    console.log(
+      `${logPrefix} - user id: ${userId}, updates since: ${since.timestamp}, elapsed time: ${elapsedTime}ms, max wait time: ${maxWaitTime}ms`,
+    );
 
-        const res = await getUpdatesFn(userId, since);
+    const res = await getUpdatesFn(userId, since);
 
-        if (res !== undefined) {
-            if (res.length > 0) {
-                result = res;
-                done = true;
-            } else {
-                result = [];
-                done = (Date.now() - startTime) >= maxWaitTime;
-                if (!done) {
-                    await new Promise(resolve => setTimeout(resolve, iterWaitTime));
-                }
-            }
-        } else {
-            result = undefined;
-            done = true;
+    if (res !== undefined) {
+      if (res.length > 0) {
+        result = res;
+        done = true;
+      } else {
+        result = [];
+        done = Date.now() - startTime >= maxWaitTime;
+        if (!done) {
+          await new Promise((resolve) => setTimeout(resolve, iterWaitTime));
         }
+      }
+    } else {
+      result = undefined;
+      done = true;
     }
-    return result;
+  }
+  return result;
 }
