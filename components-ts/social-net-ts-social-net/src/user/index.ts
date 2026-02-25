@@ -273,16 +273,14 @@ export class UserIndexAgent extends BaseAgent {
 @agent({ mode: "ephemeral" })
 export class UserSearchAgent extends BaseAgent {
     @prompt("Search users")
-    @description("Searches for users using UserIndexAgent")
-    async search(query: string): Promise<User[]> {
+    @description("Searches for users")
+    async search(query: string): Promise<Result<User[], string>> {
         console.log("Search users - query: " + query);
         const parsedQuery = parseQuery(query);
 
         const result: User[] = [];
 
-        // Get user IDs from UserIndexAgent
-        const userIndex = UserIndexAgent.get();
-        const userIndexState = await userIndex.getState();
+        const userIndexState = await UserIndexAgent.get().getState();
         const userIds = userIndexState.userIds;
 
         if (userIds.length > 0) {
@@ -302,7 +300,7 @@ export class UserSearchAgent extends BaseAgent {
             }
         }
 
-        return result;
+        return Result.ok(result);
     }
 }
 
