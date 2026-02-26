@@ -261,7 +261,7 @@ async function fetchChatsByIds(
   return results;
 }
 
-function matchesChatRef(chatRef: ChatRef, query: Query): boolean {
+function chatRefMatchesQuery(chatRef: ChatRef, query: Query): boolean {
   for (const [field, value] of query.fieldFilters) {
     let matches = false;
     switch (field.toLowerCase()) {
@@ -300,7 +300,7 @@ export class UserChatsViewAgent extends BaseAgent {
       const parsedQuery = parseQuery(query);
       const chatRefs = userChats.chats;
       const chatIds = chatRefs
-        .filter((chatRef) => matchesChatRef(chatRef, parsedQuery))
+        .filter((chatRef) => chatRefMatchesQuery(chatRef, parsedQuery))
         .map((p) => p.chatId);
 
       if (chatIds.length === 0) {
