@@ -157,7 +157,32 @@ export function disconnectUserAgent(
   return false;
 }
 
-export function matchesQuery(user: User, query: Query): boolean {
+export function userIdMatchesQuery(userId: string, query: Query): boolean {
+  for (const [field, value] of query.fieldFilters) {
+    let matches = false;
+    switch (field.toLowerCase()) {
+      case "user-id":
+      case "userid":
+        matches = textExactMatches(userId, value);
+        break;
+      case "name":
+      case "email":
+      case "connected-users":
+      case "connectedusers":
+        matches = true;
+        break;
+      default:
+        matches = false;
+    }
+    if (!matches) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function userMatchesQuery(user: User, query: Query): boolean {
   for (const [field, value] of query.fieldFilters) {
     let matches = false;
     switch (field.toLowerCase()) {
@@ -224,7 +249,7 @@ export class UserAgent extends BaseAgent {
   @prompt("Get user if matches query")
   @description("Returns the user if it matches the query, null otherwise")
   async getUserIfMatch(query: Query): Promise<User | null> {
-    return this.state && matchesQuery(this.state, query) ? this.state : null;
+    return this.state && userMatchesQuery(this.state, query) ? this.state : null;
   }
 
   @prompt("Set the user name")
@@ -345,10 +370,10 @@ export class UserSearchAgent extends BaseAgent {
     const result: User[] = [];
 
     const userIndexState = await UserIndexAgent.get().getState();
-    const userIds = userIndexState.userIds;
+    const userIds = userIndexState.userIds.filter((id) => userIdMatchesQuery(id, parsedQuery));
 
     if (userIds.length > 0) {
-      const idsChunks = arrayChunks(userIds, 5);
+      const idsChunks = arrayChunks(userIds, 20);
 
       for (const ids of idsChunks) {
         console.log("Search users - ids: (" + ids + ")");

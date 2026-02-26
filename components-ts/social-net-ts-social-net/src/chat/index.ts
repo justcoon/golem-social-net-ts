@@ -172,7 +172,7 @@ export function removeChatMessageLike(
   return false;
 }
 
-export function matchesQuery(chat: Chat, query: Query): boolean {
+export function chatMatchesQuery(chat: Chat, query: Query): boolean {
   for (const [field, value] of query.fieldFilters) {
     let matches = false;
     switch (field.toLowerCase()) {
@@ -232,7 +232,7 @@ export class ChatAgent extends BaseAgent {
   @prompt("Get chat if matches query")
   @description("Returns the chat if it matches the query, null otherwise")
   async getChatIfMatch(query: Query): Promise<Chat | null> {
-    return this.state && matchesQuery(this.state, query) ? this.state : null;
+    return this.state && chatMatchesQuery(this.state, query) ? this.state : null;
   }
 
   @prompt("Initialize the chat")

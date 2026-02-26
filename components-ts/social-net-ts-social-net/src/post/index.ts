@@ -36,7 +36,7 @@ export interface Post {
   updatedAt: Timestamp;
 }
 
-export function matchesQuery(post: Post, query: Query): boolean {
+export function postMatchesQuery(post: Post, query: Query): boolean {
   // Check field filters first
   for (const [field, value] of query.fieldFilters) {
     let matches = false;
@@ -373,7 +373,7 @@ export class PostAgent extends BaseAgent {
   @prompt("Get post if matches query")
   @description("Returns the post if it matches the query, null otherwise")
   async getPostIfMatch(query: Query): Promise<Post | null> {
-    return this.state && matchesQuery(this.state, query) ? this.state : null;
+    return this.state && postMatchesQuery(this.state, query) ? this.state : null;
   }
 
   @prompt("Initialize the post")
