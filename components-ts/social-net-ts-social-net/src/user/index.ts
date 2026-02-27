@@ -19,7 +19,7 @@ import {
   optTextMatches,
   textExactMatches,
 } from "../common/query";
-import { arrayChunks } from "../common/utils";
+import { arrayChunks, getShardNumber } from "../common/utils";
 
 export interface ConnectedUser {
   userId: string;
@@ -40,6 +40,12 @@ export interface User {
 export interface UserIndexState {
   userIds: string[];
   updatedAt: Timestamp;
+}
+
+export const USER_INDEX_SHARDS = 8;
+
+export function getUserIndexShard(id: string): number {
+  return getShardNumber(id, USER_INDEX_SHARDS);
 }
 
 export function initUserState(userId: string, now: Timestamp): User {
@@ -234,8 +240,9 @@ export class UserAgent extends BaseAgent {
   private getState(): User {
     if (this.state === null) {
       this.state = initUserState(this._id, getCurrentTimestamp());
-      // Add user ID to index when user is created
-      UserIndexAgent.get().add.trigger(this._id);
+      // Add user ID to the correct shard index when user is created
+      const userShard = getUserIndexShard(this._id);
+      UserIndexAgent.get(userShard).add.trigger(this._id);
     }
     return this.state;
   }
@@ -335,20 +342,25 @@ export class UserAgent extends BaseAgent {
 
 @agent()
 export class UserIndexAgent extends BaseAgent {
+  private readonly shard: number;
   private state: UserIndexState;
 
-  constructor() {
+  constructor(shard: number) {
     super();
+    this.shard = shard;
     this.state = initUserIndexState();
   }
 
   @prompt("Add user ID to index")
-  @description("Adds a user ID to the user index")
+  @description("Adds a user ID to the user index if it belongs to this shard")
   async add(userId: string): Promise<void> {
-    console.log(`Adding user ID to index: ${userId}`);
-    if (!this.state.userIds.includes(userId)) {
-      this.state.userIds.push(userId);
-      this.state.updatedAt = getCurrentTimestamp();
+    const userShard = getUserIndexShard(userId);
+    if (userShard == this.shard) {
+      console.log(`Adding user ID to index shard ${this.shard}: ${userId}`);
+      if (!this.state.userIds.includes(userId)) {
+        this.state.userIds.push(userId);
+        this.state.updatedAt = getCurrentTimestamp();
+      }
     }
   }
 
@@ -362,18 +374,29 @@ export class UserIndexAgent extends BaseAgent {
 @agent({ mode: "ephemeral" })
 export class UserSearchAgent extends BaseAgent {
   @prompt("Search users")
-  @description("Searches for users")
+  @description("Searches for users across all shards")
   async search(query: string): Promise<Result<User[], string>> {
     console.log("Search users - query: " + query);
     const parsedQuery = parseQuery(query);
 
     const result: User[] = [];
 
-    const userIndexState = await UserIndexAgent.get().getState();
-    const userIds = userIndexState.userIds.filter((id) => userIdMatchesQuery(id, parsedQuery));
+    // Fetch states from all shards in parallel
+    const shardPromises = [];
+    for (let i = 0; i < USER_INDEX_SHARDS; i++) {
+      shardPromises.push(UserIndexAgent.get(i).getState());
+    }
+    const shardStates = await Promise.all(shardPromises);
 
-    if (userIds.length > 0) {
-      const idsChunks = arrayChunks(userIds, 20);
+    // Collect all user IDs from all shards
+    const allUserIds: string[] = [];
+    for (const state of shardStates) {
+      const matchingIds = state.userIds.filter((id) => userIdMatchesQuery(id, parsedQuery));
+      allUserIds.push(...matchingIds);
+    }
+
+    if (allUserIds.length > 0) {
+      const idsChunks = arrayChunks(allUserIds, 20);
 
       for (const ids of idsChunks) {
         console.log("Search users - ids: (" + ids + ")");
