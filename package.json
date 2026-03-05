@@ -8,7 +8,8 @@
   ],
   "dependencies": {
     "@golemcloud/golem-ts-sdk": "0.0.74",
-    "ts-md5": "^2.0.1"
+    "ts-md5": "^2.0.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@golemcloud/golem-ts-typegen": "0.0.74",
