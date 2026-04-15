@@ -46,3 +46,6 @@ httpApi:
         UserChatsAgent: {}
         UserChatsViewAgent: {}
         UserChatsUpdatesAgent: {}
+        UserPostsAgent: {}
+        UserPostsViewAgent: {}
+        UserPostsUpdatesAgent: {}
