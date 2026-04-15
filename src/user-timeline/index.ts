@@ -4,6 +4,7 @@ import {
   agent,
   prompt,
   description,
+  endpoint,
 } from "@golemcloud/golem-ts-sdk";
 
 import { UserConnectionType, Timestamp } from "../common/types";
@@ -163,12 +164,13 @@ function matchesPostRef(postRef: PostRef, query: Query): boolean {
   return true;
 }
 
-@agent({ mode: "ephemeral" })
+@agent({ mode: "ephemeral", mount: "/v1/social-net/users/{userId}/timeline" })
 export class UserTimelineViewAgent extends BaseAgent {
   constructor() {
     super();
   }
 
+  @endpoint({ get: "/posts?query={query}" })
   @prompt("Get posts view")
   @description("Returns fetched and filtered timeline posts")
   async getPostsView(userId: string, query: string): Promise<Post[] | null> {
@@ -220,21 +222,22 @@ export class UserTimelineViewAgent extends BaseAgent {
   }
 }
 
-@agent({ mode: "ephemeral" })
+@agent({ mode: "ephemeral", mount: "/v1/social-net/users/{userId}/timeline" })
 export class UserTimelineUpdatesAgent extends BaseAgent {
   constructor() {
     super();
   }
 
+  @endpoint({ get: "/posts/updates?since={since}&iterWaitTime={iterWaitTime}&maxWaitTime={maxWaitTime}" })
   @prompt("Get posts updates")
   @description("Polls and retrieves timeline post updates for a user")
   async getPostsUpdates(
     userId: string,
-    updatesSince: Timestamp | null,
+    since: Timestamp | null,
     iterWaitTime: number | null,
     maxWaitTime: number | null,
   ): Promise<PostRef[] | null> {
-    const uSince = updatesSince ?? undefined;
+    const uSince = since ?? undefined;
     const iWait = iterWaitTime ?? undefined;
     const mWait = maxWaitTime ?? undefined;
 
