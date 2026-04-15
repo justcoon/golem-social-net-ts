@@ -4,9 +4,10 @@ import {
   agent,
   prompt,
   description,
+  endpoint,
 } from "@golemcloud/golem-ts-sdk";
 
-import { Timestamp } from "../common/types";
+import { Timestamp, ErrorResponse } from "../common/types";
 import { getCurrentTimestamp } from "../common/utils";
 
 import { parseQuery } from "../common/query";
@@ -23,6 +24,17 @@ export interface UserPosts {
   posts: PostRef[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+// Request interfaces for HTTP endpoints
+export interface CreatePostRequest {
+  content: string;
+}
+
+export interface GetPostsUpdatesRequest {
+  since: Timestamp | null;
+  iterWaitTime: number | null;
+  maxWaitTime: number | null;
 }
 
 export interface UserPostsUpdates {
@@ -55,7 +67,7 @@ export function addUserPost(
   return postRef;
 }
 
-@agent()
+@agent({ mount: '/v1/social-net/users/{id}/posts' })
 export class UserPostsAgent extends BaseAgent {
   private readonly _id: string;
   private state: UserPosts | null = null;
@@ -74,6 +86,7 @@ export class UserPostsAgent extends BaseAgent {
 
   @prompt("Get posts")
   @description("Returns the posts for the user")
+  @endpoint({ get: '/' })
   async getPosts(): Promise<UserPosts | null> {
     return this.state;
   }
@@ -98,7 +111,8 @@ export class UserPostsAgent extends BaseAgent {
 
   @prompt("Create post")
   @description("Creates a new post with content")
-  async createPost(content: string): Promise<Result<string, string>> {
+  @endpoint({ post: '/' })
+  async createPost(request: CreatePostRequest): Promise<Result<string, ErrorResponse>> {
     const state = this.getState();
 
     // Note: Generate uuid natively or via lib
@@ -108,7 +122,7 @@ export class UserPostsAgent extends BaseAgent {
     const now = getCurrentTimestamp();
     addUserPost(state, postId, now);
 
-    PostAgent.get(postId).initPost.trigger(state.userId, content);
+    PostAgent.get(postId).initPost.trigger(state.userId, request.content);
 
     return Result.ok(postId);
   }
@@ -155,13 +169,13 @@ export class UserPostsViewAgent extends BaseAgent {
   @description("Returns updated fetched posts")
   async getPostsUpdatesView(
     userId: string,
-    updatesSince: Timestamp,
+    since: Timestamp | null,
   ): Promise<Post[] | null> {
     const userPostsUpdates =
-      await UserPostsAgent.get(userId).getUpdates(updatesSince);
+      await UserPostsAgent.get(userId).getUpdates(since ?? getCurrentTimestamp());
 
     console.log(
-      `get posts updates view - user id: ${userId}, updates since: ${updatesSince.timestamp}`,
+      `get posts updates view - user id: ${userId}, updates since: ${since?.timestamp}`,
     );
 
     if (userPostsUpdates !== null) {
