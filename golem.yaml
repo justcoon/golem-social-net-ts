@@ -35,11 +35,6 @@ httpApi:
     local:
     - domain: golem-social-net-ts-new.localhost:9006
       agents:
-        CounterAgent: {}
-        WorkflowAgent: {}
-        HumanAgent: {}
-        TaskAgent: {}
-        CounterWithSnapshotAgent: {}
         UserAgent: {}
         PostAgent: {}
         ChatAgent: {}
