@@ -42,3 +42,7 @@ httpApi:
         CounterWithSnapshotAgent: {}
         UserAgent: {}
         PostAgent: {}
+        ChatAgent: {}
+        UserChatsAgent: {}
+        UserChatsViewAgent: {}
+        UserChatsUpdatesAgent: {}

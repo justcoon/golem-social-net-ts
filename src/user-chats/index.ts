@@ -4,17 +4,29 @@ import {
   agent,
   prompt,
   description,
+  endpoint,
 } from "@golemcloud/golem-ts-sdk";
 
 import { Query, parseQuery, textExactMatches } from "../common/query";
 import { serialize, deserialize } from "../common/snapshot";
-import { Timestamp } from "../common/types";
+import { Timestamp, ErrorResponse } from "../common/types";
 import { getCurrentTimestamp } from "../common/utils";
 import { pollForUpdates } from "../common/poll";
 import { arrayChunks } from "../common/utils";
 import { Chat, ChatAgent } from "../chat/index";
 
 const CHATS_MAX_COUNT = 500;
+
+// Request interfaces for HTTP endpoints
+export interface CreateChatRequest {
+  participants: string[];
+}
+
+export interface GetChatsUpdatesRequest {
+  since: Timestamp | null;
+  iterWaitTime: number | null;
+  maxWaitTime: number | null;
+}
 
 export interface ChatRef {
   chatId: string;
@@ -73,7 +85,7 @@ export function updateUserChat(
   state: UserChats,
   chatId: string,
   updatedAt: Timestamp,
-): Result<null, string> {
+): Result<null, ErrorResponse> {
   const chatIdx = state.chats.findIndex((c) => c.chatId === chatId);
   if (chatIdx !== -1) {
     state.chats[chatIdx]!.updatedAt = updatedAt;
@@ -83,7 +95,7 @@ export function updateUserChat(
     state.updatedAt = getCurrentTimestamp();
     return Result.ok(null);
   } else {
-    return Result.err("Chat not found");
+    return Result.err({ message: "Chat not found" });
   }
 }
 
@@ -122,7 +134,7 @@ export function removeUserChat(
   state.updatedAt = now;
 }
 
-@agent()
+@agent({ mount: '/v1/social-net/users/{id}/chats' })
 export class UserChatsAgent extends BaseAgent {
   private readonly _id: string;
   private state: UserChats | null = null;
@@ -141,24 +153,26 @@ export class UserChatsAgent extends BaseAgent {
 
   @prompt("Get chats")
   @description("Returns the chats for the user")
+  @endpoint({ get: '/' })
   async getChats(): Promise<UserChats | null> {
     return this.state;
   }
 
   @prompt("Create chat")
   @description("Creates a new chat")
-  async createChat(participantsIds: string[]): Promise<Result<string, string>> {
+  @endpoint({ post: '/' })
+  async createChat(request: CreateChatRequest): Promise<Result<string, ErrorResponse>> {
     const state = this.getState();
     const chatId = crypto.randomUUID();
     console.log(
-      `create chat - chat id: ${chatId}, created by: ${state.userId}, participants: ${participantsIds.length}`,
+      `create chat - chat id: ${chatId}, created by: ${state.userId}, participants: ${request.participants.length}`,
     );
 
     const now = getCurrentTimestamp();
     addUserChat(state, chatId, state.userId, now);
 
     // Trigger chat initialization
-    ChatAgent.get(chatId).initChat.trigger(participantsIds, state.userId, now);
+    ChatAgent.get(chatId).initChat.trigger(request.participants, state.userId, now);
 
     return Result.ok(chatId);
   }
@@ -186,7 +200,7 @@ export class UserChatsAgent extends BaseAgent {
   async chatUpdated(
     chatId: string,
     updatedAt: Timestamp,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, ErrorResponse>> {
     const state = this.getState();
     console.log(
       `chat updated - chat id: ${chatId}, updated at: ${updatedAt.timestamp}`,
@@ -207,7 +221,7 @@ export class UserChatsAgent extends BaseAgent {
     chatId: string,
     createdBy: string,
     createdAt: Timestamp,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, ErrorResponse>> {
     const state = this.getState();
     console.log(
       `add chat - chat id: ${chatId}, created by: ${createdBy}, created at: ${createdAt.timestamp}`,
@@ -218,7 +232,7 @@ export class UserChatsAgent extends BaseAgent {
 
   @prompt("Remove chat")
   @description("Triggered when a chat is removed from the user's list")
-  async removeChat(chatId: string): Promise<Result<null, string>> {
+  async removeChat(chatId: string): Promise<Result<null, ErrorResponse>> {
     const state = this.getState();
     console.log(`remove chat - chat id: ${chatId}`);
     removeUserChat(state, chatId, getCurrentTimestamp());
@@ -283,7 +297,7 @@ function chatRefMatchesQuery(chatRef: ChatRef, query: Query): boolean {
   return true;
 }
 
-@agent({ mode: "ephemeral" })
+@agent({ mode: "ephemeral", mount: '/v1/social-net/users/{userId}/chats/search' })
 export class UserChatsViewAgent extends BaseAgent {
   constructor() {
     super();
@@ -291,6 +305,7 @@ export class UserChatsViewAgent extends BaseAgent {
 
   @prompt("Get chats view")
   @description("Returns fetched and filtered chats")
+  @endpoint({ get: '?query={query}' })
   async getChatsView(userId: string, query: string): Promise<Chat[] | null> {
     const userChats = await UserChatsAgent.get(userId).getChats();
 
@@ -341,7 +356,7 @@ export class UserChatsViewAgent extends BaseAgent {
   }
 }
 
-@agent({ mode: "ephemeral" })
+@agent({ mode: "ephemeral", mount: '/v1/social-net/users/{userId}/chats/updates' })
 export class UserChatsUpdatesAgent extends BaseAgent {
   constructor() {
     super();
@@ -349,13 +364,14 @@ export class UserChatsUpdatesAgent extends BaseAgent {
 
   @prompt("Get chats updates")
   @description("Polls and retrieves chat updates for a user")
+  @endpoint({ get: '?since={since}&iterWaitTime={iterWaitTime}&maxWaitTime={maxWaitTime}' })
   async getChatsUpdates(
     userId: string,
-    updatesSince: Timestamp | null,
+    since: Timestamp | null,
     iterWaitTime: number | null,
     maxWaitTime: number | null,
   ): Promise<ChatRef[] | null> {
-    const uSince = updatesSince ?? undefined;
+    const uSince = since ?? undefined;
     const iWait = iterWaitTime ?? undefined;
     const mWait = maxWaitTime ?? undefined;
 
