@@ -4,16 +4,32 @@ import {
   agent,
   prompt,
   description,
+  endpoint,
 } from "@golemcloud/golem-ts-sdk";
 import { v4 as uuidv4 } from "uuid";
 
-import { LikeType, Timestamp } from "../common/types";
+import { LikeType, Timestamp, ErrorResponse } from "../common/types";
 import { serialize, deserialize } from "../common/snapshot";
 import { getCurrentTimestamp } from "../common/utils";
 import { Query, optTextMatches, textExactMatches } from "../common/query";
 import { UserChatsAgent } from "../user-chats";
 
 const MAX_CHAT_LENGTH = 2000;
+
+// Request interfaces for HTTP endpoints
+export interface AddMessageRequest {
+  userId: string;
+  content: string;
+}
+
+export interface AddParticipantsRequest {
+  participants: string[];
+}
+
+export interface SetMessageLikeRequest {
+  userId: string;
+  likeType: LikeType;
+}
 
 export interface Message {
   messageId: string;
@@ -101,9 +117,9 @@ export function addChatMessage(
   userId: string,
   content: string,
   now: Timestamp,
-): Result<Message, string> {
+): Result<Message, ErrorResponse> {
   if (chat.messages.length >= MAX_CHAT_LENGTH) {
-    return Result.err("Max chat length");
+    return Result.err({ message: "Max chat length" });
   } else {
     const message: Message = {
       messageId: uuidv4(),
@@ -206,7 +222,7 @@ export function chatMatchesQuery(chat: Chat, query: Query): boolean {
   );
 }
 
-@agent()
+@agent({ mount: '/v1/social-net/chats/{id}' })
 export class ChatAgent extends BaseAgent {
   private readonly _id: string;
   private state: Chat | null = null;
@@ -225,6 +241,7 @@ export class ChatAgent extends BaseAgent {
 
   @prompt("Get the chat")
   @description("Returns the chat details")
+  @endpoint({ get: '/' })
   async getChat(): Promise<Chat | null> {
     return this.state;
   }
@@ -241,9 +258,9 @@ export class ChatAgent extends BaseAgent {
     participantsIds: string[],
     createdBy: string,
     createdAt: Timestamp,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, ErrorResponse>> {
     if (this.state !== null) {
-      return Result.err("Chat already exists");
+      return Result.err({ message: "Chat already exists" });
     }
 
     const pSet = new Set(participantsIds);
@@ -251,7 +268,7 @@ export class ChatAgent extends BaseAgent {
     const uniqueParticipants = Array.from(pSet);
 
     if (uniqueParticipants.length < 2) {
-      return Result.err("Chat must have at least 2 participants");
+      return Result.err({ message: "Chat must have at least 2 participants" });
     }
 
     const state = this.getState();
@@ -272,23 +289,22 @@ export class ChatAgent extends BaseAgent {
 
   @prompt("Add chat participants")
   @description("Adds new participants to the chat")
-  async addParticipants(
-    participantsIds: string[],
-  ): Promise<Result<null, string>> {
+  @endpoint({ custom: { method: 'PATCH', path: '/participants' } })
+  async addParticipants(request: AddParticipantsRequest): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Chat not exists");
+      return Result.err({ message: "Chat not exists" });
     }
 
     const state = this.getState();
     const oldParticipants = [...state.participants];
     const newParticipants = addChatParticipants(
       state,
-      participantsIds,
+      request.participants,
       getCurrentTimestamp(),
     );
 
     if (newParticipants.length === 0) {
-      return Result.err("No new participants");
+      return Result.err({ message: "No new participants" });
     } else {
       console.log(
         `add participants - new participants: ${newParticipants.length}`,
@@ -308,21 +324,19 @@ export class ChatAgent extends BaseAgent {
 
   @prompt("Add a chat message")
   @description("Adds a new message to the chat")
-  async addMessage(
-    userId: string,
-    content: string,
-  ): Promise<Result<string, string>> {
+  @endpoint({ post: '/messages' })
+  async addMessage(request: AddMessageRequest): Promise<Result<string, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Chat not exists");
+      return Result.err({ message: "Chat not exists" });
     }
 
     const state = this.getState();
-    console.log(`add message - user id: ${userId}, content: ${content}`);
+    console.log(`add message - user id: ${request.userId}, content: ${request.content}`);
 
     const result = addChatMessage(
       state,
-      userId,
-      content,
+      request.userId,
+      request.content,
       getCurrentTimestamp(),
     );
     if (result.isOk()) {
@@ -335,9 +349,10 @@ export class ChatAgent extends BaseAgent {
 
   @prompt("Remove a chat message")
   @description("Removes a message from the chat")
-  async removeMessage(messageId: string): Promise<Result<null, string>> {
+  @endpoint({ delete: '/messages/{messageId}' })
+  async removeMessage(messageId: string): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Chat not exists");
+      return Result.err({ message: "Chat not exists" });
     }
 
     const state = this.getState();
@@ -348,49 +363,50 @@ export class ChatAgent extends BaseAgent {
       executeChatUpdates(state.chatId, state.participants, state.updatedAt);
       return Result.ok(null);
     } else {
-      return Result.err("Message not found");
+      return Result.err({ message: "Message not found" });
     }
   }
 
   @prompt("Set like on a message")
   @description("Sets a like for a chat message")
+  @endpoint({ put: '/messages/{messageId}/likes' })
   async setMessageLike(
     messageId: string,
-    userId: string,
-    likeType: LikeType,
-  ): Promise<Result<null, string>> {
+    request: SetMessageLikeRequest,
+  ): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Chat not exists");
+      return Result.err({ message: "Chat not exists" });
     }
 
     const state = this.getState();
     console.log(
-      `set message like - message id: ${messageId}, user id: ${userId}, like type: ${likeType}`,
+      `set message like - message id: ${messageId}, user id: ${request.userId}, like type: ${request.likeType}`,
     );
 
     const updated = setChatMessageLike(
       state,
       messageId,
-      userId,
-      likeType,
+      request.userId,
+      request.likeType,
       getCurrentTimestamp(),
     );
     if (updated) {
       executeChatUpdates(state.chatId, state.participants, state.updatedAt);
       return Result.ok(null);
     } else {
-      return Result.err("Message not found");
+      return Result.err({ message: "Message not found" });
     }
   }
 
   @prompt("Remove like from a message")
   @description("Removes a like from a chat message")
+  @endpoint({ delete: '/messages/{messageId}/likes/{userId}' })
   async removeMessageLike(
     messageId: string,
     userId: string,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Chat not exists");
+      return Result.err({ message: "Chat not exists" });
     }
 
     const state = this.getState();
@@ -408,7 +424,7 @@ export class ChatAgent extends BaseAgent {
       executeChatUpdates(state.chatId, state.participants, state.updatedAt);
       return Result.ok(null);
     } else {
-      return Result.err("Message not found");
+      return Result.err({ message: "Message not found" });
     }
   }
 
