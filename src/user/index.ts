@@ -4,6 +4,7 @@ import {
   agent,
   prompt,
   description,
+  endpoint,
 } from "@golemcloud/golem-ts-sdk";
 
 import {
@@ -43,6 +44,25 @@ export interface UserIndexState {
 }
 
 export const USER_INDEX_SHARDS = 8;
+
+// Request interfaces for HTTP endpoints
+export interface SetNameRequest {
+  name: string | null;
+}
+
+export interface SetEmailRequest {
+  email: string | null;
+}
+
+export interface ConnectUserRequest {
+  userId: string;
+  connectionType: UserConnectionType;
+}
+
+export interface DisconnectUserRequest {
+  userId: string;
+  connectionType: UserConnectionType;
+}
 
 export function getUserIndexShard(id: string): number {
   return getShardNumber(id, USER_INDEX_SHARDS);
@@ -227,7 +247,7 @@ export function userMatchesQuery(user: User, query: Query): boolean {
   );
 }
 
-@agent()
+@agent({ mount: '/v1/social-net/users/{id}' })
 export class UserAgent extends BaseAgent {
   private readonly _id: string;
   private state: User | null = null;
@@ -249,6 +269,7 @@ export class UserAgent extends BaseAgent {
 
   @prompt("Get the user details")
   @description("Returns the user details")
+  @endpoint({ get: '/' })
   async getUser(): Promise<User | null> {
     return this.state;
   }
@@ -261,41 +282,41 @@ export class UserAgent extends BaseAgent {
 
   @prompt("Set the user name")
   @description("Sets the user name")
-  async setName(name: string | null): Promise<Result<null, string>> {
-    console.log(`set name: ${name ?? "N/A"}`);
-    setUserAgentName(this.getState(), name, getCurrentTimestamp());
+  @endpoint({ put: '/name' })
+  async setName(request: SetNameRequest): Promise<Result<null, string>> {
+    console.log(`set name: ${request.name ?? "N/A"}`);
+    setUserAgentName(this.getState(), request.name, getCurrentTimestamp());
     return Result.ok(null);
   }
 
   @prompt("Set the user email")
   @description("Sets the user email")
-  async setEmail(email: string | null): Promise<Result<null, string>> {
-    console.log(`set email: ${email ?? "N/A"}`);
-    return setUserAgentEmail(this.getState(), email, getCurrentTimestamp());
+  @endpoint({ put: '/email' })
+  async setEmail(request: SetEmailRequest): Promise<Result<null, string>> {
+    console.log(`set email: ${request.email ?? "N/A"}`);
+    return setUserAgentEmail(this.getState(), request.email, getCurrentTimestamp());
   }
 
   @prompt("Connect with a user")
   @description("Connects with a given user via a connection type")
-  async connectUser(
-    userId: string,
-    connectionType: UserConnectionType,
-  ): Promise<Result<null, string>> {
+  @endpoint({ put: '/connections' })
+  async connectUser(request: ConnectUserRequest): Promise<Result<null, string>> {
     const state = this.getState();
     const updated = connectUserAgent(
       state,
-      userId,
-      connectionType,
+      request.userId,
+      request.connectionType,
       getCurrentTimestamp(),
     );
     if (updated) {
-      console.log(`connect user - id: ${userId}, type: ${connectionType}`);
-      UserAgent.get(userId).connectUser.trigger(
-        state.userId,
-        getOppositeConnectionType(connectionType),
-      );
+      console.log(`connect user - id: ${request.userId}, type: ${request.connectionType}`);
+      UserAgent.get(request.userId).connectUser.trigger({
+        userId: state.userId,
+        connectionType: getOppositeConnectionType(request.connectionType),
+      });
     } else {
       console.log(
-        `connect user - id: ${userId}, type: ${connectionType} - connection already exists or invalid`,
+        `connect user - id: ${request.userId}, type: ${request.connectionType} - connection already exists or invalid`,
       );
     }
     return Result.ok(null);
@@ -303,26 +324,24 @@ export class UserAgent extends BaseAgent {
 
   @prompt("Disconnect a user")
   @description("Disconnects connection with a user")
-  async disconnectUser(
-    userId: string,
-    connectionType: UserConnectionType,
-  ): Promise<Result<null, string>> {
+  @endpoint({ delete: '/connections' })
+  async disconnectUser(request: DisconnectUserRequest): Promise<Result<null, string>> {
     const state = this.getState();
     const updated = disconnectUserAgent(
       state,
-      userId,
-      connectionType,
+      request.userId,
+      request.connectionType,
       getCurrentTimestamp(),
     );
     if (updated) {
-      console.log(`disconnect user - id: ${userId}, type: ${connectionType}`);
-      UserAgent.get(userId).disconnectUser.trigger(
-        state.userId,
-        getOppositeConnectionType(connectionType),
-      );
+      console.log(`disconnect user - id: ${request.userId}, type: ${request.connectionType}`);
+      UserAgent.get(request.userId).disconnectUser.trigger({
+        userId: state.userId,
+        connectionType: getOppositeConnectionType(request.connectionType),
+      });
     } else {
       console.log(
-        `disconnect user - id: ${userId}, type: ${connectionType} - connection not found or invalid`,
+        `disconnect user - id: ${request.userId}, type: ${request.connectionType} - connection not found or invalid`,
       );
     }
     return Result.ok(null);

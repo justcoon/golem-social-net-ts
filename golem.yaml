@@ -40,3 +40,5 @@ httpApi:
         HumanAgent: {}
         TaskAgent: {}
         CounterWithSnapshotAgent: {}
+        UserAgent: {}
+        PostAgent: {}

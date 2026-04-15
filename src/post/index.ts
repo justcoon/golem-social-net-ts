@@ -4,6 +4,7 @@ import {
   agent,
   prompt,
   description,
+  endpoint,
 } from "@golemcloud/golem-ts-sdk";
 import { v4 as uuidv4 } from "uuid";
 
@@ -15,6 +16,23 @@ import { UserAgent } from "../user/index";
 import { PostRef, UserTimelineAgent } from "../user-timeline/index";
 
 const MAX_COMMENTS_LENGTH = 2000;
+
+// Request interfaces for HTTP endpoints
+export interface SetLikeRequest {
+  userId: string;
+  likeType: LikeType;
+}
+
+export interface AddCommentRequest {
+  userId: string;
+  content: string;
+  parentCommentId: string | null;
+}
+
+export interface SetCommentLikeRequest {
+  userId: string;
+  likeType: LikeType;
+}
 
 export interface Comment {
   commentId: string;
@@ -347,7 +365,7 @@ export function removePostCommentLike(
   return Result.err("Comment not found");
 }
 
-@agent()
+@agent({ mount: '/v1/social-net/posts/{id}' })
 export class PostAgent extends BaseAgent {
   private readonly _id: string;
   private state: Post | null = null;
@@ -366,6 +384,7 @@ export class PostAgent extends BaseAgent {
 
   @prompt("Get the post")
   @description("Returns the post details")
+  @endpoint({ get: '/' })
   async getPost(): Promise<Post | null> {
     return this.state;
   }
@@ -405,21 +424,20 @@ export class PostAgent extends BaseAgent {
 
   @prompt("Set like on the post")
   @description("Sets a like for the post")
-  async setLike(
-    userId: string,
-    likeType: LikeType,
-  ): Promise<Result<null, string>> {
+  @endpoint({ put: '/likes' })
+  async setLike(request: SetLikeRequest): Promise<Result<null, string>> {
     if (this.state === null) {
       return Result.err("Post not exists");
     }
     const state = this.getState();
-    console.log(`set like - user id: ${userId}, like type: ${likeType}`);
-    setPostLike(state, userId, likeType, getCurrentTimestamp());
+    console.log(`set like - user id: ${request.userId}, like type: ${request.likeType}`);
+    setPostLike(state, request.userId, request.likeType, getCurrentTimestamp());
     return Result.ok(null);
   }
 
   @prompt("Remove like from the post")
   @description("Removes a like from the post")
+  @endpoint({ delete: '/likes/{userId}' })
   async removeLike(userId: string): Promise<Result<null, string>> {
     if (this.state === null) {
       return Result.err("Post not exists");
@@ -432,28 +450,26 @@ export class PostAgent extends BaseAgent {
 
   @prompt("Add a comment")
   @description("Adds a new comment to the post")
-  async addComment(
-    userId: string,
-    content: string,
-    parentCommentId: string | null,
-  ): Promise<Result<string, string>> {
+  @endpoint({ post: '/comments' })
+  async addComment(request: AddCommentRequest): Promise<Result<string, string>> {
     if (this.state === null) {
       return Result.err("Post not exists");
     }
 
     const state = this.getState();
-    console.log(`add comment - user id: ${userId}, content: ${content} `);
+    console.log(`add comment - user id: ${request.userId}, content: ${request.content} `);
     return addPostComment(
       state,
-      userId,
-      content,
-      parentCommentId,
+      request.userId,
+      request.content,
+      request.parentCommentId,
       getCurrentTimestamp(),
     );
   }
 
   @prompt("Remove a comment")
   @description("Removes a comment from the post")
+  @endpoint({ delete: '/comments/{commentId}' })
   async removeComment(commentId: string): Promise<Result<null, string>> {
     if (this.state === null) {
       return Result.err("Post not exists");
@@ -466,10 +482,10 @@ export class PostAgent extends BaseAgent {
 
   @prompt("Set like on a comment")
   @description("Sets a like for a comment")
+  @endpoint({ put: '/comments/{commentId}/likes' })
   async setCommentLike(
     commentId: string,
-    userId: string,
-    likeType: LikeType,
+    request: SetCommentLikeRequest,
   ): Promise<Result<null, string>> {
     if (this.state === null) {
       return Result.err("Post not exists");
@@ -477,19 +493,20 @@ export class PostAgent extends BaseAgent {
 
     const state = this.getState();
     console.log(
-      `set comment like - comment id: ${commentId}, user id: ${userId}, like type: ${likeType}`,
+      `set comment like - comment id: ${commentId}, user id: ${request.userId}, like type: ${request.likeType}`,
     );
     return setPostCommentLike(
       state,
       commentId,
-      userId,
-      likeType,
+      request.userId,
+      request.likeType,
       getCurrentTimestamp(),
     );
   }
 
   @prompt("Remove like from a comment")
   @description("Removes a like from a comment")
+  @endpoint({ delete: '/comments/{commentId}/likes/{userId}' })
   async removeCommentLike(
     commentId: string,
     userId: string,
