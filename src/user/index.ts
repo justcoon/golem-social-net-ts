@@ -11,6 +11,7 @@ import {
   getOppositeConnectionType,
   UserConnectionType,
   Timestamp,
+  ErrorResponse,
 } from "../common/types";
 import { serialize, deserialize } from "../common/snapshot";
 import { getCurrentTimestamp } from "../common/utils";
@@ -100,11 +101,11 @@ export function setUserAgentEmail(
   user: User,
   email: string | null,
   now: Timestamp,
-): Result<null, string> {
+): Result<null, ErrorResponse> {
   if (email !== null) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return Result.err(`Invalid email`);
+      return Result.err({ message: "Invalid email" });
     }
   }
   user.email = email;
@@ -283,7 +284,7 @@ export class UserAgent extends BaseAgent {
   @prompt("Set the user name")
   @description("Sets the user name")
   @endpoint({ put: '/name' })
-  async setName(request: SetNameRequest): Promise<Result<null, string>> {
+  async setName(request: SetNameRequest): Promise<Result<null, ErrorResponse>> {
     console.log(`set name: ${request.name ?? "N/A"}`);
     setUserAgentName(this.getState(), request.name, getCurrentTimestamp());
     return Result.ok(null);
@@ -292,7 +293,7 @@ export class UserAgent extends BaseAgent {
   @prompt("Set the user email")
   @description("Sets the user email")
   @endpoint({ put: '/email' })
-  async setEmail(request: SetEmailRequest): Promise<Result<null, string>> {
+  async setEmail(request: SetEmailRequest): Promise<Result<null, ErrorResponse>> {
     console.log(`set email: ${request.email ?? "N/A"}`);
     return setUserAgentEmail(this.getState(), request.email, getCurrentTimestamp());
   }
@@ -300,7 +301,7 @@ export class UserAgent extends BaseAgent {
   @prompt("Connect with a user")
   @description("Connects with a given user via a connection type")
   @endpoint({ put: '/connections' })
-  async connectUser(request: ConnectUserRequest): Promise<Result<null, string>> {
+  async connectUser(request: ConnectUserRequest): Promise<Result<null, ErrorResponse>> {
     const state = this.getState();
     const updated = connectUserAgent(
       state,
@@ -325,7 +326,7 @@ export class UserAgent extends BaseAgent {
   @prompt("Disconnect a user")
   @description("Disconnects connection with a user")
   @endpoint({ delete: '/connections' })
-  async disconnectUser(request: DisconnectUserRequest): Promise<Result<null, string>> {
+  async disconnectUser(request: DisconnectUserRequest): Promise<Result<null, ErrorResponse>> {
     const state = this.getState();
     const updated = disconnectUserAgent(
       state,

@@ -8,7 +8,7 @@ import {
 } from "@golemcloud/golem-ts-sdk";
 import { v4 as uuidv4 } from "uuid";
 
-import { LikeType, Timestamp } from "../common/types";
+import { LikeType, Timestamp, ErrorResponse } from "../common/types";
 import { Query, textExactMatches, textMatches } from "../common/query";
 import { serialize, deserialize } from "../common/snapshot";
 import { arrayChunks, getCurrentTimestamp } from "../common/utils";
@@ -265,7 +265,7 @@ export function removePostLike(
   post: Post,
   userId: string,
   now: Timestamp,
-): Result<null, string> {
+): Result<null, ErrorResponse> {
   const initialLength = post.likes.length;
   post.likes = post.likes.filter((l) => l[0] !== userId);
 
@@ -273,7 +273,7 @@ export function removePostLike(
     post.updatedAt = now;
     return Result.ok(null);
   } else {
-    return Result.err("Like not found");
+    return Result.err({ message: "Like not found" });
   }
 }
 
@@ -283,9 +283,9 @@ export function addPostComment(
   content: string,
   parentCommentId: string | null,
   now: Timestamp,
-): Result<string, string> {
+): Result<string, ErrorResponse> {
   if (post.comments.length >= MAX_COMMENTS_LENGTH) {
-    return Result.err("Max comments limit reached");
+    return Result.err({ message: "Max comments limit reached" });
   }
 
   const cid = uuidv4();
@@ -310,7 +310,7 @@ export function removePostComment(
   post: Post,
   commentId: string,
   now: Timestamp,
-): Result<null, string> {
+): Result<null, ErrorResponse> {
   const initialLength = post.comments.length;
   post.comments = post.comments.filter(
     (c) => c[0] !== commentId && c[1].parentCommentId !== commentId,
@@ -320,7 +320,7 @@ export function removePostComment(
     post.updatedAt = now;
     return Result.ok(null);
   } else {
-    return Result.err("Comment not found");
+    return Result.err({ message: "Comment not found" });
   }
 }
 
@@ -330,7 +330,7 @@ export function setPostCommentLike(
   userId: string,
   likeType: LikeType,
   now: Timestamp,
-): Result<null, string> {
+): Result<null, ErrorResponse> {
   const commentTuple = post.comments.find((c) => c[0] === commentId);
   if (commentTuple) {
     const comment = commentTuple[1];
@@ -340,7 +340,7 @@ export function setPostCommentLike(
     post.updatedAt = now;
     return Result.ok(null);
   } else {
-    return Result.err("Comment not found");
+    return Result.err({ message: "Comment not found" });
   }
 }
 
@@ -349,7 +349,7 @@ export function removePostCommentLike(
   commentId: string,
   userId: string,
   now: Timestamp,
-): Result<null, string> {
+): Result<null, ErrorResponse> {
   const commentTuple = post.comments.find((c) => c[0] === commentId);
   if (commentTuple) {
     const comment = commentTuple[1];
@@ -362,7 +362,7 @@ export function removePostCommentLike(
       return Result.ok(null);
     }
   }
-  return Result.err("Comment not found");
+  return Result.err({ message: "Comment not found" });
 }
 
 @agent({ mount: '/v1/social-net/posts/{id}' })
@@ -400,9 +400,9 @@ export class PostAgent extends BaseAgent {
   async initPost(
     createdBy: string,
     content: string,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, ErrorResponse>> {
     if (this.state !== null) {
-      return Result.err("Post already exists");
+      return Result.err({ message: "Post already exists" });
     }
 
     const state = this.getState();
@@ -425,9 +425,9 @@ export class PostAgent extends BaseAgent {
   @prompt("Set like on the post")
   @description("Sets a like for the post")
   @endpoint({ put: '/likes' })
-  async setLike(request: SetLikeRequest): Promise<Result<null, string>> {
+  async setLike(request: SetLikeRequest): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Post not exists");
+      return Result.err({ message: "Post not exists" });
     }
     const state = this.getState();
     console.log(`set like - user id: ${request.userId}, like type: ${request.likeType}`);
@@ -438,9 +438,9 @@ export class PostAgent extends BaseAgent {
   @prompt("Remove like from the post")
   @description("Removes a like from the post")
   @endpoint({ delete: '/likes/{userId}' })
-  async removeLike(userId: string): Promise<Result<null, string>> {
+  async removeLike(userId: string): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Post not exists");
+      return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
@@ -451,9 +451,9 @@ export class PostAgent extends BaseAgent {
   @prompt("Add a comment")
   @description("Adds a new comment to the post")
   @endpoint({ post: '/comments' })
-  async addComment(request: AddCommentRequest): Promise<Result<string, string>> {
+  async addComment(request: AddCommentRequest): Promise<Result<string, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Post not exists");
+      return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
@@ -470,9 +470,9 @@ export class PostAgent extends BaseAgent {
   @prompt("Remove a comment")
   @description("Removes a comment from the post")
   @endpoint({ delete: '/comments/{commentId}' })
-  async removeComment(commentId: string): Promise<Result<null, string>> {
+  async removeComment(commentId: string): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Post not exists");
+      return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
@@ -486,9 +486,9 @@ export class PostAgent extends BaseAgent {
   async setCommentLike(
     commentId: string,
     request: SetCommentLikeRequest,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Post not exists");
+      return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
@@ -510,9 +510,9 @@ export class PostAgent extends BaseAgent {
   async removeCommentLike(
     commentId: string,
     userId: string,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
-      return Result.err("Post not exists");
+      return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();

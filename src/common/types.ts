@@ -35,3 +35,7 @@ export function isNegativeLike(type: LikeType): boolean {
 export interface Timestamp {
   timestamp: string;
 }
+
+export interface ErrorResponse {
+  message: string;
+}
