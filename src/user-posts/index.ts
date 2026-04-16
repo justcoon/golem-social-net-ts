@@ -139,7 +139,10 @@ export class UserPostsAgent extends BaseAgent {
   }
 }
 
-@agent({ mode: "ephemeral" })
+@agent({ 
+  mode: "ephemeral",
+  mount: '/v1/social-net/users/{userId}/posts'
+})
 export class UserPostsViewAgent extends BaseAgent {
   constructor() {
     super();
@@ -147,6 +150,7 @@ export class UserPostsViewAgent extends BaseAgent {
 
   @prompt("Get posts view")
   @description("Returns fetched and filtered posts")
+  @endpoint({ get: '/search?query={query}' })
   async getPostsView(userId: string, query: string): Promise<Post[] | null> {
     const userPosts = await UserPostsAgent.get(userId).getPosts();
 
@@ -167,6 +171,7 @@ export class UserPostsViewAgent extends BaseAgent {
 
   @prompt("Get posts updates view")
   @description("Returns updated fetched posts")
+  @endpoint({ get: '/updates?since={since}' })
   async getPostsUpdatesView(
     userId: string,
     since: Timestamp | null,

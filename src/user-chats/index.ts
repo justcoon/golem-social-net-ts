@@ -297,7 +297,7 @@ function chatRefMatchesQuery(chatRef: ChatRef, query: Query): boolean {
   return true;
 }
 
-@agent({ mode: "ephemeral", mount: '/v1/social-net/users/{userId}/chats/search' })
+@agent({ mode: "ephemeral", mount: '/v1/social-net/users' })
 export class UserChatsViewAgent extends BaseAgent {
   constructor() {
     super();
@@ -305,7 +305,7 @@ export class UserChatsViewAgent extends BaseAgent {
 
   @prompt("Get chats view")
   @description("Returns fetched and filtered chats")
-  @endpoint({ get: '?query={query}' })
+  @endpoint({ get: '/{userId}/chats/search?query={query}' })
   async getChatsView(userId: string, query: string): Promise<Chat[] | null> {
     const userChats = await UserChatsAgent.get(userId).getChats();
 
@@ -330,6 +330,7 @@ export class UserChatsViewAgent extends BaseAgent {
 
   @prompt("Get chats updates view")
   @description("Returns updated fetched chats")
+  @endpoint({ get: '/{userId}/updates?since={since}' })
   async getChatsUpdatesView(
     userId: string,
     updatesSince: Timestamp,
@@ -356,7 +357,7 @@ export class UserChatsViewAgent extends BaseAgent {
   }
 }
 
-@agent({ mode: "ephemeral", mount: '/v1/social-net/users/{userId}/chats/updates' })
+@agent({ mode: "ephemeral", mount: '/v1/social-net/users' })
 export class UserChatsUpdatesAgent extends BaseAgent {
   constructor() {
     super();
@@ -364,7 +365,7 @@ export class UserChatsUpdatesAgent extends BaseAgent {
 
   @prompt("Get chats updates")
   @description("Polls and retrieves chat updates for a user")
-  @endpoint({ get: '?since={since}&iterWaitTime={iterWaitTime}&maxWaitTime={maxWaitTime}' })
+  @endpoint({ get: '/{userId}/chats/updates?since={since}&iterWaitTime={iterWaitTime}&maxWaitTime={maxWaitTime}' })
   async getChatsUpdates(
     userId: string,
     since: Timestamp | null,
