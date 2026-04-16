@@ -46,3 +46,4 @@ httpApi:
         UserPostsUpdatesAgent: {}
         UserTimelineViewAgent: {}
         UserTimelineUpdatesAgent: {}
+        UserSearchAgent: {}

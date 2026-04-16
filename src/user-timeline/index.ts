@@ -164,13 +164,13 @@ function matchesPostRef(postRef: PostRef, query: Query): boolean {
   return true;
 }
 
-@agent({ mode: "ephemeral", mount: "/v1/social-net/users/timeline" })
+@agent({ mode: "ephemeral", mount: "/v1/social-net/users" })
 export class UserTimelineViewAgent extends BaseAgent {
   constructor() {
     super();
   }
 
-  @endpoint({ get: "/{userId}/posts?query={query}" })
+  @endpoint({ get: "/{userId}/timeline/posts?query={query}" })
   @prompt("Get posts view")
   @description("Returns fetched and filtered timeline posts")
   async getPostsView(userId: string, query: string): Promise<Post[] | null> {
@@ -197,7 +197,7 @@ export class UserTimelineViewAgent extends BaseAgent {
 
   @prompt("Get posts updates view")
   @description("Returns updated fetched timeline posts")
-  @endpoint({ get: "/{userId}/posts/updates?since={since}" })
+  // @endpoint({ get: "/{userId}/timeline/posts/updates?since={since}" })
   async getPostsUpdatesView(
     userId: string,
     updatesSince: Timestamp,
@@ -223,13 +223,13 @@ export class UserTimelineViewAgent extends BaseAgent {
   }
 }
 
-@agent({ mode: "ephemeral", mount: "/v1/social-net/users/timeline" })
+@agent({ mode: "ephemeral", mount: "/v1/social-net/users" })
 export class UserTimelineUpdatesAgent extends BaseAgent {
   constructor() {
     super();
   }
 
-  @endpoint({ get: "/{userId}/posts/updates?since={since}&iterWaitTime={iterWaitTime}&maxWaitTime={maxWaitTime}" })
+  @endpoint({ get: "/{userId}/timeline/posts/updates?since={since}&iterWaitTime={iterWaitTime}&maxWaitTime={maxWaitTime}" })
   @prompt("Get posts updates")
   @description("Polls and retrieves timeline post updates for a user")
   async getPostsUpdates(

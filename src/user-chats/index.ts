@@ -330,7 +330,7 @@ export class UserChatsViewAgent extends BaseAgent {
 
   @prompt("Get chats updates view")
   @description("Returns updated fetched chats")
-  @endpoint({ get: '/{userId}/updates?since={since}' })
+  // @endpoint({ get: '/{userId}/updates?since={since}' })
   async getChatsUpdatesView(
     userId: string,
     updatesSince: Timestamp,
