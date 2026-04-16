@@ -391,11 +391,11 @@ export class UserIndexAgent extends BaseAgent {
   }
 }
 
-@agent({ mode: "ephemeral", mount: '/v1/social-net/users/search' })
+@agent({ mode: "ephemeral", mount: '/v1/social-net/users' })
 export class UserSearchAgent extends BaseAgent {
   @prompt("Search users")
   @description("Searches for users across all shards")
-  @endpoint({ get: '?query={query}' })
+  @endpoint({ get: '/search?query={query}' })
   async search(query: string): Promise<Result<User[], string>> {
     console.log("Search users - query: " + query);
     const parsedQuery = parseQuery(query);
