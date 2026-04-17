@@ -17,17 +17,6 @@ import { Chat, ChatAgent } from "../chat/index";
 
 const CHATS_MAX_COUNT = 500;
 
-// Request interfaces for HTTP endpoints
-export interface CreateChatRequest {
-  participants: string[];
-}
-
-export interface GetChatsUpdatesRequest {
-  since: Timestamp | null;
-  iterWaitTime: number | null;
-  maxWaitTime: number | null;
-}
-
 export interface ChatRef {
   chatId: string;
   createdBy: string;
@@ -161,18 +150,18 @@ export class UserChatsAgent extends BaseAgent {
   @prompt("Create chat")
   @description("Creates a new chat")
   @endpoint({ post: '/' })
-  async createChat(request: CreateChatRequest): Promise<Result<string, ErrorResponse>> {
+  async createChat(participants: string[]): Promise<Result<string, ErrorResponse>> {
     const state = this.getState();
     const chatId = crypto.randomUUID();
     console.log(
-      `create chat - chat id: ${chatId}, created by: ${state.userId}, participants: ${request.participants.length}`,
+      `create chat - chat id: ${chatId}, created by: ${state.userId}, participants: ${participants.length}`,
     );
 
     const now = getCurrentTimestamp();
     addUserChat(state, chatId, state.userId, now);
 
     // Trigger chat initialization
-    ChatAgent.get(chatId).initChat.trigger(request.participants, state.userId, now);
+    ChatAgent.get(chatId).initChat.trigger(participants, state.userId, now);
 
     return Result.ok(chatId);
   }

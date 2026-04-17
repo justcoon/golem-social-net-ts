@@ -17,22 +17,6 @@ import { PostRef, UserTimelineAgent } from "../user-timeline/index";
 
 const MAX_COMMENTS_LENGTH = 2000;
 
-// Request interfaces for HTTP endpoints
-export interface SetLikeRequest {
-  userId: string;
-  likeType: LikeType;
-}
-
-export interface AddCommentRequest {
-  userId: string;
-  content: string;
-  parentCommentId: string | null;
-}
-
-export interface SetCommentLikeRequest {
-  userId: string;
-  likeType: LikeType;
-}
 
 export interface Comment {
   commentId: string;
@@ -425,13 +409,13 @@ export class PostAgent extends BaseAgent {
   @prompt("Set like on the post")
   @description("Sets a like for the post")
   @endpoint({ put: '/likes' })
-  async setLike(request: SetLikeRequest): Promise<Result<null, ErrorResponse>> {
+  async setLike(userId: string, likeType: LikeType): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
     const state = this.getState();
-    console.log(`set like - user id: ${request.userId}, like type: ${request.likeType}`);
-    setPostLike(state, request.userId, request.likeType, getCurrentTimestamp());
+    console.log(`set like - user id: ${userId}, like type: ${likeType}`);
+    setPostLike(state, userId, likeType, getCurrentTimestamp());
     return Result.ok(null);
   }
 
@@ -451,18 +435,18 @@ export class PostAgent extends BaseAgent {
   @prompt("Add a comment")
   @description("Adds a new comment to the post")
   @endpoint({ post: '/comments' })
-  async addComment(request: AddCommentRequest): Promise<Result<string, ErrorResponse>> {
+  async addComment(userId: string, content: string, parentCommentId: string | null): Promise<Result<string, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
-    console.log(`add comment - user id: ${request.userId}, content: ${request.content} `);
+    console.log(`add comment - user id: ${userId}, content: ${content} `);
     return addPostComment(
       state,
-      request.userId,
-      request.content,
-      request.parentCommentId,
+      userId,
+      content,
+      parentCommentId,
       getCurrentTimestamp(),
     );
   }
@@ -485,7 +469,8 @@ export class PostAgent extends BaseAgent {
   @endpoint({ put: '/comments/{commentId}/likes' })
   async setCommentLike(
     commentId: string,
-    request: SetCommentLikeRequest,
+    userId: string,
+    likeType: LikeType,
   ): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
@@ -493,13 +478,13 @@ export class PostAgent extends BaseAgent {
 
     const state = this.getState();
     console.log(
-      `set comment like - comment id: ${commentId}, user id: ${request.userId}, like type: ${request.likeType}`,
+      `set comment like - comment id: ${commentId}, user id: ${userId}, like type: ${likeType}`,
     );
     return setPostCommentLike(
       state,
       commentId,
-      request.userId,
-      request.likeType,
+      userId,
+      likeType,
       getCurrentTimestamp(),
     );
   }

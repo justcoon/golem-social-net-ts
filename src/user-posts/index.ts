@@ -26,17 +26,6 @@ export interface UserPosts {
   updatedAt: Timestamp;
 }
 
-// Request interfaces for HTTP endpoints
-export interface CreatePostRequest {
-  content: string;
-}
-
-export interface GetPostsUpdatesRequest {
-  since: Timestamp | null;
-  iterWaitTime: number | null;
-  maxWaitTime: number | null;
-}
-
 export interface UserPostsUpdates {
   userId: string;
   posts: PostRef[];
@@ -112,7 +101,7 @@ export class UserPostsAgent extends BaseAgent {
   @prompt("Create post")
   @description("Creates a new post with content")
   @endpoint({ post: '/' })
-  async createPost(request: CreatePostRequest): Promise<Result<string, ErrorResponse>> {
+  async createPost(content: string): Promise<Result<string, ErrorResponse>> {
     const state = this.getState();
 
     // Note: Generate uuid natively or via lib
@@ -122,7 +111,7 @@ export class UserPostsAgent extends BaseAgent {
     const now = getCurrentTimestamp();
     addUserPost(state, postId, now);
 
-    PostAgent.get(postId).initPost.trigger(state.userId, request.content);
+    PostAgent.get(postId).initPost.trigger(state.userId, content);
 
     return Result.ok(postId);
   }

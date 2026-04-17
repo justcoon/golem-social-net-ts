@@ -16,21 +16,6 @@ import { UserChatsAgent } from "../user-chats";
 
 const MAX_CHAT_LENGTH = 2000;
 
-// Request interfaces for HTTP endpoints
-export interface AddMessageRequest {
-  userId: string;
-  content: string;
-}
-
-export interface AddParticipantsRequest {
-  participants: string[];
-}
-
-export interface SetMessageLikeRequest {
-  userId: string;
-  likeType: LikeType;
-}
-
 export interface Message {
   messageId: string;
   content: string;
@@ -290,7 +275,7 @@ export class ChatAgent extends BaseAgent {
   @prompt("Add chat participants")
   @description("Adds new participants to the chat")
   @endpoint({ custom: { method: 'PATCH', path: '/participants' } })
-  async addParticipants(request: AddParticipantsRequest): Promise<Result<null, ErrorResponse>> {
+  async addParticipants(participants: string[]): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Chat not exists" });
     }
@@ -299,7 +284,7 @@ export class ChatAgent extends BaseAgent {
     const oldParticipants = [...state.participants];
     const newParticipants = addChatParticipants(
       state,
-      request.participants,
+      participants,
       getCurrentTimestamp(),
     );
 
@@ -325,18 +310,18 @@ export class ChatAgent extends BaseAgent {
   @prompt("Add a chat message")
   @description("Adds a new message to the chat")
   @endpoint({ post: '/messages' })
-  async addMessage(request: AddMessageRequest): Promise<Result<string, ErrorResponse>> {
+  async addMessage(userId: string, content: string): Promise<Result<string, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Chat not exists" });
     }
 
     const state = this.getState();
-    console.log(`add message - user id: ${request.userId}, content: ${request.content}`);
+    console.log(`add message - user id: ${userId}, content: ${content}`);
 
     const result = addChatMessage(
       state,
-      request.userId,
-      request.content,
+      userId,
+      content,
       getCurrentTimestamp(),
     );
     if (result.isOk()) {
@@ -372,7 +357,8 @@ export class ChatAgent extends BaseAgent {
   @endpoint({ put: '/messages/{messageId}/likes' })
   async setMessageLike(
     messageId: string,
-    request: SetMessageLikeRequest,
+    userId: string,
+    likeType: LikeType,
   ): Promise<Result<null, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Chat not exists" });
@@ -380,14 +366,14 @@ export class ChatAgent extends BaseAgent {
 
     const state = this.getState();
     console.log(
-      `set message like - message id: ${messageId}, user id: ${request.userId}, like type: ${request.likeType}`,
+      `set message like - message id: ${messageId}, user id: ${userId}, like type: ${likeType}`,
     );
 
     const updated = setChatMessageLike(
       state,
       messageId,
-      request.userId,
-      request.likeType,
+      userId,
+      likeType,
       getCurrentTimestamp(),
     );
     if (updated) {
