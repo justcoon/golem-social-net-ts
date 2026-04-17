@@ -368,11 +368,11 @@ export class UserChatsUpdatesAgent extends BaseAgent {
   @endpoint({ get: '/{userId}/chats/updates?since={since}&iterWaitTime={iterWaitTime}&maxWaitTime={maxWaitTime}' })
   async getChatsUpdates(
     userId: string,
-    since: Timestamp | null,
+    since: string | null,
     iterWaitTime: number | null,
     maxWaitTime: number | null,
   ): Promise<ChatRef[] | null> {
-    const uSince = since ?? undefined;
+    const uSince = since ? { timestamp: since } : undefined;
     const iWait = iterWaitTime ?? undefined;
     const mWait = maxWaitTime ?? undefined;
 

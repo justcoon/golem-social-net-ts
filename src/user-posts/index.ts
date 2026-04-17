@@ -174,13 +174,13 @@ export class UserPostsViewAgent extends BaseAgent {
   @endpoint({ get: '/{userId}/posts/updates?since={since}' })
   async getPostsUpdatesView(
     userId: string,
-    since: Timestamp | null,
+    since: string | null,
   ): Promise<Post[] | null> {
     const userPostsUpdates =
-      await UserPostsAgent.get(userId).getUpdates(since ?? getCurrentTimestamp());
+      await UserPostsAgent.get(userId).getUpdates(since ? { timestamp: since } : getCurrentTimestamp());
 
     console.log(
-      `get posts updates view - user id: ${userId}, updates since: ${since?.timestamp}`,
+      `get posts updates view - user id: ${userId}, updates since: ${since}`,
     );
 
     if (userPostsUpdates !== null) {

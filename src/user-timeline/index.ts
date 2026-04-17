@@ -234,11 +234,11 @@ export class UserTimelineUpdatesAgent extends BaseAgent {
   @description("Polls and retrieves timeline post updates for a user")
   async getPostsUpdates(
     userId: string,
-    since: Timestamp | null,
+    since: string | null,
     iterWaitTime: number | null,
     maxWaitTime: number | null,
   ): Promise<PostRef[] | null> {
-    const uSince = since ?? undefined;
+    const uSince = since ? { timestamp: since } : undefined;
     const iWait = iterWaitTime ?? undefined;
     const mWait = maxWaitTime ?? undefined;
 
