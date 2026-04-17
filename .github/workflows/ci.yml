@@ -141,7 +141,7 @@ jobs:
             sleep 2
           done
       - name: Deploy components
-        run: golem deploy --reset
+        run: golem deploy --reset --yes
       - name: Smoke test deployment
         run: |
           echo "Testing basic deployment..."
