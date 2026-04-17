@@ -33,17 +33,16 @@ components:
 httpApi:
   deployments:
     local:
-    - domain: golem-social-net-ts-new.localhost:9006
+    - domain: localhost:9006
       agents:
         UserAgent: {}
+        UserSearchAgent: {}
+        UserPostsAgent: {}
+        UserChatsAgent: {}
         PostAgent: {}
         ChatAgent: {}
-        UserChatsAgent: {}
         UserChatsViewAgent: {}
-        UserChatsUpdatesAgent: {}
-        UserPostsAgent: {}
         UserPostsViewAgent: {}
-        UserPostsUpdatesAgent: {}
         UserTimelineViewAgent: {}
+        UserChatsUpdatesAgent: {}
         UserTimelineUpdatesAgent: {}
-        UserSearchAgent: {}
