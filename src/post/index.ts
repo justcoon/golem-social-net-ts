@@ -28,6 +28,10 @@ export interface Comment {
   updatedAt: Timestamp;
 }
 
+export interface AddCommentResponse {
+  commentId: string;
+}
+
 export interface Post {
   postId: string;
   content: string;
@@ -435,20 +439,26 @@ export class PostAgent extends BaseAgent {
   @prompt("Add a comment")
   @description("Adds a new comment to the post")
   @endpoint({ post: '/comments' })
-  async addComment(userId: string, content: string, parentCommentId: string | null): Promise<Result<string, ErrorResponse>> {
+  async addComment(userId: string, content: string, parentCommentId: string | null): Promise<Result<AddCommentResponse, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
     console.log(`add comment - user id: ${userId}, content: ${content} `);
-    return addPostComment(
+    const res = addPostComment(
       state,
       userId,
       content,
       parentCommentId,
       getCurrentTimestamp(),
     );
+
+    if (res.isOk()) {
+      return Result.ok({ commentId: res.val });
+    } else {
+      return res;
+    }
   }
 
   @prompt("Remove a comment")
