@@ -101,7 +101,7 @@ export class UserPostsAgent extends BaseAgent {
   @prompt("Create post")
   @description("Creates a new post with content")
   @endpoint({ post: '/' })
-  async createPost(content: string): Promise<Result<string, ErrorResponse>> {
+  async createPost(content: string): Promise<Result<PostRef, ErrorResponse>> {
     const state = this.getState();
 
     // Note: Generate uuid natively or via lib
@@ -109,11 +109,11 @@ export class UserPostsAgent extends BaseAgent {
     console.log(`create post - id: ${postId}`);
 
     const now = getCurrentTimestamp();
-    addUserPost(state, postId, now);
+    const post = addUserPost(state, postId, now);
 
     PostAgent.get(postId).initPost.trigger(state.userId, content);
 
-    return Result.ok(postId);
+    return Result.ok(post);
   }
 
   override async saveSnapshot(): Promise<Uint8Array> {

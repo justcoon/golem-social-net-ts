@@ -150,7 +150,7 @@ export class UserChatsAgent extends BaseAgent {
   @prompt("Create chat")
   @description("Creates a new chat")
   @endpoint({ post: '/' })
-  async createChat(participants: string[]): Promise<Result<string, ErrorResponse>> {
+  async createChat(participants: string[]): Promise<Result<ChatRef, ErrorResponse>> {
     const state = this.getState();
     const chatId = crypto.randomUUID();
     console.log(
@@ -158,12 +158,12 @@ export class UserChatsAgent extends BaseAgent {
     );
 
     const now = getCurrentTimestamp();
-    addUserChat(state, chatId, state.userId, now);
+    const chat = addUserChat(state, chatId, state.userId, now);
 
     // Trigger chat initialization
     ChatAgent.get(chatId).initChat.trigger(participants, state.userId, now);
 
-    return Result.ok(chatId);
+    return Result.ok(chat);
   }
 
   @prompt("Get updates")
