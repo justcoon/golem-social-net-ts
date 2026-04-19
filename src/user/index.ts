@@ -30,6 +30,10 @@ export interface ConnectedUser {
   updatedAt: Timestamp;
 }
 
+export interface UpdateResponse {
+  userId: string;
+}
+
 export interface User {
   userId: string;
   name: string | null;
@@ -265,24 +269,25 @@ export class UserAgent extends BaseAgent {
   @prompt("Set the user name")
   @description("Sets the user name")
   @endpoint({ put: '/name' })
-  async setName(name: string | null): Promise<Result<null, ErrorResponse>> {
+  async setName(name: string | null): Promise<Result<UpdateResponse, ErrorResponse>> {
     console.log(`set name: ${name ?? "N/A"}`);
     setUserAgentName(this.getState(), name, getCurrentTimestamp());
-    return Result.ok(null);
+    return Result.ok({ userId: this._id });
   }
 
   @prompt("Set the user email")
   @description("Sets the user email")
   @endpoint({ put: '/email' })
-  async setEmail(email: string | null): Promise<Result<null, ErrorResponse>> {
+  async setEmail(email: string | null): Promise<Result<UpdateResponse, ErrorResponse>> {
     console.log(`set email: ${email ?? "N/A"}`);
-    return setUserAgentEmail(this.getState(), email, getCurrentTimestamp());
+    return setUserAgentEmail(this.getState(), email, getCurrentTimestamp())
+      .map(() => ({ userId: this._id }));
   }
 
   @prompt("Connect with a user")
   @description("Connects with a given user via a connection type")
   @endpoint({ put: '/connections' })
-  async connectUser(userId: string, connectionType: UserConnectionType): Promise<Result<null, ErrorResponse>> {
+  async connectUser(userId: string, connectionType: UserConnectionType): Promise<Result<UpdateResponse, ErrorResponse>> {
     const state = this.getState();
     const updated = connectUserAgent(
       state,
@@ -301,13 +306,13 @@ export class UserAgent extends BaseAgent {
         `connect user - id: ${userId}, type: ${connectionType} - connection already exists or invalid`,
       );
     }
-    return Result.ok(null);
+    return Result.ok({ userId: this._id });
   }
 
   @prompt("Disconnect a user")
   @description("Disconnects connection with a user")
   @endpoint({ delete: '/connections' })
-  async disconnectUser(userId: string, connectionType: UserConnectionType): Promise<Result<null, ErrorResponse>> {
+  async disconnectUser(userId: string, connectionType: UserConnectionType): Promise<Result<UpdateResponse, ErrorResponse>> {
     const state = this.getState();
     const updated = disconnectUserAgent(
       state,
@@ -326,7 +331,7 @@ export class UserAgent extends BaseAgent {
         `disconnect user - id: ${userId}, type: ${connectionType} - connection not found or invalid`,
       );
     }
-    return Result.ok(null);
+    return Result.ok({ userId: this._id });
   }
 
   override async saveSnapshot(): Promise<Uint8Array> {

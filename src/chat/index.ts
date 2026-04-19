@@ -34,7 +34,12 @@ export interface Chat {
     updatedAt: Timestamp;
 }
 
+export interface UpdateResponse {
+    chatId: string;
+}
+
 export interface AddMessageResponse {
+    chatId: string;
     messageId: string;
 }
 
@@ -247,7 +252,7 @@ export class ChatAgent extends BaseAgent {
         participantsIds: string[],
         createdBy: string,
         createdAt: Timestamp,
-    ): Promise<Result<null, ErrorResponse>> {
+    ): Promise<Result<UpdateResponse, ErrorResponse>> {
         if (this.state !== null) {
             return Result.err({message: "Chat already exists"});
         }
@@ -273,13 +278,13 @@ export class ChatAgent extends BaseAgent {
             state.createdAt,
             state.participants,
         );
-        return Result.ok(null);
+        return Result.ok({ chatId: state.chatId });
     }
 
     @prompt("Add chat participants")
     @description("Adds new participants to the chat")
     @endpoint({custom: {method: 'PATCH', path: '/participants'}})
-    async addParticipants(participants: string[]): Promise<Result<null, ErrorResponse>> {
+    async addParticipants(participants: string[]): Promise<Result<UpdateResponse, ErrorResponse>> {
         if (this.state === null) {
             return Result.err({message: "Chat not exists"});
         }
@@ -307,7 +312,7 @@ export class ChatAgent extends BaseAgent {
             );
             executeChatUpdates(state.chatId, oldParticipants, state.updatedAt);
 
-            return Result.ok(null);
+            return Result.ok({ chatId: state.chatId });
         }
     }
 
@@ -330,7 +335,7 @@ export class ChatAgent extends BaseAgent {
         );
         if (result.isOk()) {
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
-            return Result.ok({messageId: result.val.messageId});
+            return Result.ok({ chatId: state.chatId, messageId: result.val.messageId});
         } else {
             return result;
         }
@@ -339,7 +344,7 @@ export class ChatAgent extends BaseAgent {
     @prompt("Remove a chat message")
     @description("Removes a message from the chat")
     @endpoint({delete: '/messages/{messageId}'})
-    async removeMessage(messageId: string): Promise<Result<null, ErrorResponse>> {
+    async removeMessage(messageId: string): Promise<Result<UpdateResponse, ErrorResponse>> {
         if (this.state === null) {
             return Result.err({message: "Chat not exists"});
         }
@@ -350,7 +355,7 @@ export class ChatAgent extends BaseAgent {
         const updated = removeChatMessage(state, messageId, getCurrentTimestamp());
         if (updated) {
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
-            return Result.ok(null);
+            return Result.ok({ chatId: state.chatId });
         } else {
             return Result.err({message: "Message not found"});
         }
@@ -363,7 +368,7 @@ export class ChatAgent extends BaseAgent {
         messageId: string,
         userId: string,
         likeType: LikeType,
-    ): Promise<Result<null, ErrorResponse>> {
+    ): Promise<Result<UpdateResponse, ErrorResponse>> {
         if (this.state === null) {
             return Result.err({message: "Chat not exists"});
         }
@@ -382,7 +387,7 @@ export class ChatAgent extends BaseAgent {
         );
         if (updated) {
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
-            return Result.ok(null);
+            return Result.ok({ chatId: state.chatId });
         } else {
             return Result.err({message: "Message not found"});
         }
@@ -394,7 +399,7 @@ export class ChatAgent extends BaseAgent {
     async removeMessageLike(
         messageId: string,
         userId: string,
-    ): Promise<Result<null, ErrorResponse>> {
+    ): Promise<Result<UpdateResponse, ErrorResponse>> {
         if (this.state === null) {
             return Result.err({message: "Chat not exists"});
         }
@@ -412,7 +417,7 @@ export class ChatAgent extends BaseAgent {
         );
         if (updated) {
             executeChatUpdates(state.chatId, state.participants, state.updatedAt);
-            return Result.ok(null);
+            return Result.ok({ chatId: state.chatId });
         } else {
             return Result.err({message: "Message not found"});
         }

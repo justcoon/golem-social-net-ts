@@ -29,7 +29,12 @@ export interface Comment {
 }
 
 export interface AddCommentResponse {
+  postId: string;
   commentId: string;
+}
+
+export interface UpdateResponse {
+  postId: string;
 }
 
 export interface Post {
@@ -388,7 +393,7 @@ export class PostAgent extends BaseAgent {
   async initPost(
     createdBy: string,
     content: string,
-  ): Promise<Result<null, ErrorResponse>> {
+  ): Promise<Result<UpdateResponse, ErrorResponse>> {
     if (this.state !== null) {
       return Result.err({ message: "Post already exists" });
     }
@@ -407,33 +412,34 @@ export class PostAgent extends BaseAgent {
       true,
     );
 
-    return Result.ok(null);
+    return Result.ok({ postId: state.postId });
   }
 
   @prompt("Set like on the post")
   @description("Sets a like for the post")
   @endpoint({ put: '/likes' })
-  async setLike(userId: string, likeType: LikeType): Promise<Result<null, ErrorResponse>> {
+  async setLike(userId: string, likeType: LikeType): Promise<Result<UpdateResponse, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
     const state = this.getState();
     console.log(`set like - user id: ${userId}, like type: ${likeType}`);
     setPostLike(state, userId, likeType, getCurrentTimestamp());
-    return Result.ok(null);
+    return Result.ok({ postId: state.postId });
   }
 
   @prompt("Remove like from the post")
   @description("Removes a like from the post")
   @endpoint({ delete: '/likes/{userId}' })
-  async removeLike(userId: string): Promise<Result<null, ErrorResponse>> {
+  async removeLike(userId: string): Promise<Result<UpdateResponse, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
     console.log(`remove like - user id: ${userId} `);
-    return removePostLike(state, userId, getCurrentTimestamp());
+    return removePostLike(state, userId, getCurrentTimestamp())
+      .map(() => ({ postId: state.postId }));
   }
 
   @prompt("Add a comment")
@@ -455,7 +461,7 @@ export class PostAgent extends BaseAgent {
     );
 
     if (res.isOk()) {
-      return Result.ok({ commentId: res.val });
+      return Result.ok({ postId: state.postId, commentId: res.val });
     } else {
       return res;
     }
@@ -464,14 +470,15 @@ export class PostAgent extends BaseAgent {
   @prompt("Remove a comment")
   @description("Removes a comment from the post")
   @endpoint({ delete: '/comments/{commentId}' })
-  async removeComment(commentId: string): Promise<Result<null, ErrorResponse>> {
+  async removeComment(commentId: string): Promise<Result<UpdateResponse, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
 
     const state = this.getState();
     console.log(`remove comment - comment id: ${commentId} `);
-    return removePostComment(state, commentId, getCurrentTimestamp());
+    return removePostComment(state, commentId, getCurrentTimestamp())
+      .map(() => ({ postId: state.postId }));
   }
 
   @prompt("Set like on a comment")
@@ -481,7 +488,7 @@ export class PostAgent extends BaseAgent {
     commentId: string,
     userId: string,
     likeType: LikeType,
-  ): Promise<Result<null, ErrorResponse>> {
+  ): Promise<Result<UpdateResponse, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
@@ -496,7 +503,7 @@ export class PostAgent extends BaseAgent {
       userId,
       likeType,
       getCurrentTimestamp(),
-    );
+    ).map(() => ({ postId: state.postId }));
   }
 
   @prompt("Remove like from a comment")
@@ -505,7 +512,7 @@ export class PostAgent extends BaseAgent {
   async removeCommentLike(
     commentId: string,
     userId: string,
-  ): Promise<Result<null, ErrorResponse>> {
+  ): Promise<Result<UpdateResponse, ErrorResponse>> {
     if (this.state === null) {
       return Result.err({ message: "Post not exists" });
     }
@@ -519,7 +526,7 @@ export class PostAgent extends BaseAgent {
       commentId,
       userId,
       getCurrentTimestamp(),
-    );
+    ).map(() => ({ postId: state.postId }));
   }
 
   override async saveSnapshot(): Promise<Uint8Array> {
