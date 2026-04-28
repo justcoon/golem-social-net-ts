@@ -9,7 +9,7 @@ export const apiClient = axios.create({
     },
 });
 
-export type UserConnectionType = 'friend' | 'following' | 'follower'
+export type UserConnectionType = 'Friend' | 'Following' | 'Follower'
 
 export interface Timestamp {
     timestamp: string;
@@ -18,61 +18,61 @@ export interface Timestamp {
 // Types based on inferred backend usage
 
 export interface ConnectedUser {
-    'user-id': string;
-    'connection-types': UserConnectionType[];
-    'created-at': Timestamp;
-    'updated-at': Timestamp;
+    userId: string;
+    connectionTypes: UserConnectionType[];
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 // Connected users is a list of tuples: [userId, UserDetails]
 export type ConnectedUserTuple = [string, ConnectedUser];
 
 export interface User {
-    'user-id': string;
+    userId: string;
     name?: string;
     email?: string;
-    'created-at'?: Timestamp; // Enforced Timestamp only
-    'connected-users'?: ConnectedUserTuple[];
+    createdAt?: Timestamp; // Enforced Timestamp only
+    connectedUsers?: ConnectedUserTuple[];
 }
 
-export type LikeType = 'like' | 'insightful' | 'love' | 'dislike';
+export type LikeType = 'Like' | 'Insightful' | 'Love' | 'Dislike';
 
 export type UserLikeTuple = [string, LikeType];
 
 export interface Comment {
-    'comment-id': string;
-    'parent-comment-id'?: string;
+    commentId: string;
+    parentCommentId?: string;
     content: string;
     likes?: UserLikeTuple[];
-    'created-by': string;
-    'created-at': Timestamp;
+    createdBy: string;
+    createdAt: Timestamp;
 }
 // Comments is a list of tuples: [commentId, Comment]
 export type CommentTuple = [string, Comment];
 
 export interface Post {
-    'post-id': string;
+    postId: string;
     content: string;
-    'created-by': string;
-    'created-at': Timestamp;
+    createdBy: string;
+    createdAt: Timestamp;
     likes?: UserLikeTuple[];
     comments?: CommentTuple[];
 }
 
 export interface PostRef {
-    'post-id': string;
-    'created-by': string;
-    'created-by-connection-type'?: UserConnectionType;
-    'created-at': Timestamp;
+    postId: string;
+    createdBy: string;
+    createdByConnectionType?: UserConnectionType;
+    createdAt: Timestamp;
 }
 
 export interface TimelineUpdates {
-    'user-id': string;
+    userId: string;
     posts: PostRef[];
 }
 
 export interface ConnectionRequest {
-    'user-id': string; // The target user ID
-    'connection-type': UserConnectionType; // Assuming these types
+    userId: string; // The target user ID
+    connectionType: UserConnectionType; // Assuming these types
 }
 
 export const convertToKebabCase = (obj: any) => {
@@ -95,30 +95,30 @@ export const api = {
 
     searchUsers: (query: string) => apiClient.get(`/users/search`, { params: { query } }),
 
-    connectUser: (userId: string, targetUserId: string, type: UserConnectionType = 'following') =>
-        apiClient.put(`/users/${userId}/connections`, { 'user-id': targetUserId, 'connection-type': type }),
+    connectUser: (userId: string, targetUserId: string, type: UserConnectionType = 'Following') =>
+        apiClient.put(`/users/${userId}/connections`, { userId: targetUserId, connectionType: type }),
 
-    disconnectUser: (userId: string, targetUserId: string, type: UserConnectionType = 'following') =>
+    disconnectUser: (userId: string, targetUserId: string, type: UserConnectionType = 'Following') =>
         apiClient.request({
             method: 'DELETE',
             url: `/users/${userId}/connections`,
-            data: { 'user-id': targetUserId, 'connection-type': type }
+            data: { userId: targetUserId, connectionType: type }
         }),
 
     addComment: (postId: string, userId: string, content: string, parentCommentId?: string) =>
-        apiClient.post(`/posts/${postId}/comments`, { 'user-id': userId, content, 'parent-comment-id': parentCommentId }),
+        apiClient.post(`/posts/${postId}/comments`, { userId: userId, content, parentCommentId: parentCommentId }),
 
     deleteComment: (postId: string, commentId: string) =>
         apiClient.delete(`/posts/${postId}/comments/${commentId}`),
 
     likePost: (postId: string, userId: string, likeType: LikeType) =>
-        apiClient.put(`/posts/${postId}/likes`, { 'user-id': userId, 'like-type': likeType }),
+        apiClient.put(`/posts/${postId}/likes`, { userId: userId, likeType: likeType }),
 
     unlikePost: (postId: string, userId: string) =>
         apiClient.delete(`/posts/${postId}/likes/${userId}`),
 
     likeComment: (postId: string, commentId: string, userId: string, likeType: LikeType) =>
-        apiClient.put(`/posts/${postId}/comments/${commentId}/likes`, { 'user-id': userId, 'like-type': likeType }),
+        apiClient.put(`/posts/${postId}/comments/${commentId}/likes`, { userId: userId, likeType: likeType }),
 
     unlikeComment: (postId: string, commentId: string, userId: string) =>
         apiClient.delete(`/posts/${postId}/comments/${commentId}/likes/${userId}`),
@@ -134,13 +134,13 @@ export const api = {
         apiClient.get(`/users/${userId}/chats/updates`, { params: { since } }),
 
     addChatMessage: (chatId: string, userId: string, content: string) =>
-        apiClient.post(`/chats/${chatId}/messages`, { 'user-id': userId, content }),
+        apiClient.post(`/chats/${chatId}/messages`, { userId: userId, content }),
 
     deleteChatMessage: (chatId: string, messageId: string) =>
         apiClient.delete(`/chats/${chatId}/messages/${messageId}`),
 
     likeChatMessage: (chatId: string, messageId: string, userId: string, likeType: LikeType) =>
-        apiClient.put(`/chats/${chatId}/messages/${messageId}/likes`, { 'user-id': userId, 'like-type': likeType }),
+        apiClient.put(`/chats/${chatId}/messages/${messageId}/likes`, { userId: userId, likeType: likeType }),
 
     unlikeChatMessage: (chatId: string, messageId: string, userId: string) =>
         apiClient.delete(`/chats/${chatId}/messages/${messageId}/likes/${userId}`),
@@ -150,37 +150,38 @@ export const api = {
 };
 
 export interface Message {
-    'message-id': string;
+    messageId: string;
     content: string;
     likes: UserLikeTuple[];
-    'created-by': string;
-    'created-at': Timestamp;
-    'updated-at': Timestamp;
+    createdBy: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface Chat {
-    'chat-id': string;
-    'created-by': string;
+    chatId: string;
+    createdBy: string;
     participants: string[];
     messages: Message[];
-    'created-at': Timestamp;
-    'updated-at': Timestamp;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface ChatRef {
-    'chat-id': string;
-    'created-at': Timestamp;
-    'updated-at': Timestamp;
+    chatId: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface UserChats {
-    'user-id': string;
+    userId: string;
     chats: ChatRef[];
-    'created-at': Timestamp;
-    'updated-at': Timestamp;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 export interface UserChatsUpdates {
-    'user-id': string;
+    userId: string;
     chats: ChatRef[];
 }
+

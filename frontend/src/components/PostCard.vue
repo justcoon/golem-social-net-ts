@@ -40,16 +40,16 @@ watch(() => props.post, (newPost) => {
 }, { deep: true });
 
 const topLevelComments = computed(() => {
-  return comments.value.filter(c => !c['parent-comment-id'])
+  return comments.value.filter(c => !c.parentCommentId)
     .sort((a, b) => {
-      const timeA = a['created-at'].timestamp;
-      const timeB = b['created-at'].timestamp;
+      const timeA = a.createdAt.timestamp;
+      const timeB = b.createdAt.timestamp;
       return new Date(timeA).getTime() - new Date(timeB).getTime();
     });
 });
 
 const formattedDate = computed(() => {
-  const createdAt = localPost.value['created-at'];
+  const createdAt = localPost.value.createdAt;
   const dateStr = createdAt.timestamp;
 
   return new Date(dateStr).toLocaleString(undefined, {
@@ -59,7 +59,7 @@ const formattedDate = computed(() => {
 });
 
 function navigateToAuthor() {
-  router.push(`/profile/${localPost.value['created-by']}`);
+  router.push(`/profile/${localPost.value.createdBy}`);
 }
 
 async function submitComment() {
@@ -67,15 +67,15 @@ async function submitComment() {
 
     isSubmitting.value = true;
     try {
-        const response = await api.addComment(localPost.value['post-id'], userId.value, newComment.value);
+        const response = await api.addComment(localPost.value.postId, userId.value, newComment.value);
         
         // Optimistic update
         const createdNow = new Date().toISOString();
         const newCommentObj: Comment = {
-            'comment-id': response.data.ok,
+            commentId: response.data,
             content: newComment.value,
-            'created-by': userId.value,
-            'created-at': { timestamp: createdNow },
+            createdBy: userId.value,
+            createdAt: { timestamp: createdNow },
             likes: []
         };
         
@@ -98,14 +98,14 @@ function handleCommentDeleted(commentId: string) {
   function collectDescendants(id: string) {
     toRemove.add(id);
     comments.value.forEach(c => {
-      if (c['parent-comment-id'] === id) {
-        collectDescendants(c['comment-id']);
+      if (c.parentCommentId === id) {
+        collectDescendants(c.commentId);
       }
     });
   }
   
   collectDescendants(commentId);
-  comments.value = comments.value.filter(c => !toRemove.has(c['comment-id']));
+  comments.value = comments.value.filter(c => !toRemove.has(c.commentId));
 }
 
 async function handlePostLike(type: LikeType) {
@@ -125,7 +125,7 @@ async function handlePostLike(type: LikeType) {
     }
     
     try {
-        await api.likePost(localPost.value['post-id'], uid, type);
+        await api.likePost(localPost.value.postId, uid, type);
     } catch (error) {
         console.error('Failed to like post:', error);
         const currentIndex = likes.findIndex(([u]) => u === uid);
@@ -157,7 +157,7 @@ async function handlePostUnlike() {
     likes.splice(existingIndex, 1);
     
     try {
-        await api.unlikePost(localPost.value['post-id'], uid);
+        await api.unlikePost(localPost.value.postId, uid);
     } catch (error) {
         console.error('Failed to unlike post:', error);
         likes.push([uid, oldLike]);
@@ -172,10 +172,10 @@ async function handlePostUnlike() {
     <div class="flex items-start justify-between mb-4">
       <div class="flex items-center space-x-3 cursor-pointer" @click="navigateToAuthor">
         <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold select-none">
-          {{ localPost['created-by'].charAt(0).toUpperCase() }}
+          {{ localPost.createdBy.charAt(0).toUpperCase() }}
         </div>
         <div>
-          <h3 class="font-medium text-gray-200 hover:text-purple-400 transition">{{ localPost['created-by'] }}</h3>
+          <h3 class="font-medium text-gray-200 hover:text-purple-400 transition">{{ localPost.createdBy }}</h3>
           <p class="text-xs text-gray-500">{{ formattedDate }}</p>
         </div>
       </div>
@@ -205,10 +205,10 @@ async function handlePostUnlike() {
       <div class="space-y-4 mb-4">
         <CommentItem 
           v-for="comment in topLevelComments" 
-          :key="comment['comment-id']"
+          :key="comment.commentId"
           :comment="comment"
           :all-comments="comments"
-          :post-id="localPost['post-id']"
+          :post-id="localPost.postId"
           :depth="0"
           @comment-added="handleCommentAdded"
           @comment-deleted="handleCommentDeleted"

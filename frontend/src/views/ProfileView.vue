@@ -20,7 +20,7 @@ const isLoading = ref(true);
 const isConnecting = ref(false);
 const isDisconnecting = ref(false);
 const error = ref('');
-const selectedConnectionType = ref<UserConnectionType>('following');
+const selectedConnectionType = ref<UserConnectionType>('Following');
 
 const activeMenuUserId = ref<string | null>(null);
 
@@ -38,7 +38,7 @@ if (typeof window !== 'undefined') {
 
 const connectionToCurrentUser = computed(() => {
   if (!user.value || !currentUserId.value) return null;
-  const connections = user.value['connected-users'] || [];
+  const connections = user.value.connectedUsers || [];
   return connections.find(([id]) => id === currentUserId.value);
 });
 
@@ -46,7 +46,7 @@ const isCurrentUser = ref(false);
 
 const isAlreadyConnected = computed(() => {
   if (!user.value || !currentUserId.value) return false;
-  const connections = user.value['connected-users'] || [];
+  const connections = user.value.connectedUsers || [];
   return connections.some(([id]) => id === currentUserId.value);
 });
 
@@ -71,21 +71,15 @@ async function loadProfile() {
 
     if (userRes.status === 'fulfilled') {
         const data = userRes.value.data as any;
-        if (data && data.ok) {
-            user.value = data.ok;
-        } else {
-             // Fallback or error if not in ok format
-             // The backend sends 404 if none, so here it might be just ok(x) result
-             user.value = data.ok || data;
-        }
+        user.value = data;
     } else {
         error.value = 'User not found';
     }
 
     if (postsRes.status === 'fulfilled') {
         const data = postsRes.value.data as any;
-        if (Array.isArray(data.ok)) {
-           posts.value = data.ok;
+        if (Array.isArray(data)) {
+           posts.value = data;
         } else {
            posts.value = [];
         }
@@ -103,7 +97,7 @@ async function handleConnect() {
 
   isConnecting.value = true;
   try {
-    await api.connectUser(currentUserId.value, user.value['user-id'], selectedConnectionType.value);
+    await api.connectUser(currentUserId.value, user.value.userId, selectedConnectionType.value);
     // Refresh to show new connection
     await loadProfile();
   } catch (err) {
@@ -118,7 +112,7 @@ async function handleDisconnect(type: UserConnectionType) {
 
   isDisconnecting.value = true;
   try {
-    await api.disconnectUser(currentUserId.value, user.value['user-id'], type);
+    await api.disconnectUser(currentUserId.value, user.value.userId, type);
     // Refresh to show connection removed
     await loadProfile();
   } catch (err) {
@@ -170,12 +164,12 @@ watch(() => route.params.id, () => {
         
         <div class="flex flex-col md:flex-row items-center md:items-start gap-6">
           <div class="w-24 h-24 rounded-full bg-neutral-800 flex items-center justify-center text-3xl font-bold text-gray-300 border-4 border-neutral-900 shadow-xl">
-             {{ user['user-id'].charAt(0).toUpperCase() }}
+             {{ user.userId.charAt(0).toUpperCase() }}
           </div>
           
           <div class="flex-1 text-center md:text-left">
-            <h1 class="text-3xl font-bold text-white mb-2">{{ user.name || user['user-id'] }}</h1>
-            <p class="text-gray-400 mb-4">@{{ user['user-id'] }}</p>
+            <h1 class="text-3xl font-bold text-white mb-2">{{ user.name || user.userId }}</h1>
+            <p class="text-gray-400 mb-4">@{{ user.userId }}</p>
             <p v-if="user.email" class="text-gray-500 text-sm mb-4">{{ user.email }}</p>
             
             <div class="flex flex-wrap gap-4 justify-center md:justify-start">
@@ -187,16 +181,16 @@ watch(() => route.params.id, () => {
           <div v-if="!isCurrentUser && isLoggedIn && !isAlreadyConnected" class="flex flex-col sm:flex-row items-center gap-3 bg-neutral-800/50 p-3 rounded-xl border border-neutral-700/50">
              <div class="flex bg-neutral-900 rounded-lg p-1 border border-neutral-700">
                <button 
-                @click="selectedConnectionType = 'following'"
+                @click="selectedConnectionType = 'Following'"
                 class="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
-                :class="selectedConnectionType === 'following' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'"
+                :class="selectedConnectionType === 'Following' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'"
                >
                  Following
                </button>
                <button 
-                @click="selectedConnectionType = 'friend'"
+                @click="selectedConnectionType = 'Friend'"
                 class="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
-                :class="selectedConnectionType === 'friend' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'"
+                :class="selectedConnectionType === 'Friend' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'"
                >
                  Friend
                </button>
@@ -220,37 +214,37 @@ watch(() => route.params.id, () => {
              </router-link>
           </div>
           <div v-else-if="!isCurrentUser && isAlreadyConnected" class="flex flex-col gap-2">
-             <div v-if="connectionToCurrentUser" class="flex flex-wrap gap-2 justify-center md:justify-start">
-                <div 
-                    v-for="type in connectionToCurrentUser[1]['connection-types']" 
-                    :key="type"
-                    class="flex items-center gap-2 bg-neutral-800/50 px-3 py-1.5 rounded-lg border border-neutral-700/50 group transition-all hover:border-neutral-600"
-                >
-                    <span class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></span>
-                    <span class="text-xs font-medium text-gray-300 capitalize">{{ type }}</span>
-                    <button 
-                        @click="handleDisconnect(type)"
-                        :disabled="isDisconnecting"
-                        class="ml-1 text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50"
-                        :title="`Remove ${type}`"
-                    >
-                        <svg v-if="!isDisconnecting" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                        </svg>
-                        <span v-else class="w-3 h-3 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin block"></span>
-                    </button>
-                </div>
-                
-                <!-- Additional connect option if not all types are connected -->
-                <button 
-                  v-if="connectionToCurrentUser[1]['connection-types'].length < 2"
-                  @click="handleConnect"
-                  :disabled="isConnecting"
-                  class="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-gray-300 rounded-lg transition-all text-xs font-medium border border-neutral-700"
-                >
-                  + Add {{ connectionToCurrentUser[1]['connection-types'].includes('friend') ? 'Following' : 'Friend' }}
-                </button>
-             </div>
+            <div v-if="connectionToCurrentUser" class="flex flex-wrap gap-2 justify-center md:justify-start">
+              <div 
+                  v-for="type in connectionToCurrentUser[1].connectionTypes" 
+                  :key="type"
+                  class="flex items-center gap-2 bg-neutral-800/50 px-3 py-1.5 rounded-lg border border-neutral-700/50 group transition-all hover:border-neutral-600"
+              >
+                  <span class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></span>
+                  <span class="text-xs font-medium text-gray-300 capitalize">{{ type }}</span>
+                  <button 
+                      @click="handleDisconnect(type)"
+                      :disabled="isDisconnecting"
+                      class="ml-1 text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                      :title="`Remove ${type}`"
+                  >
+                      <svg v-if="!isDisconnecting" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                      </svg>
+                      <span v-else class="w-3 h-3 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin block"></span>
+                  </button>
+              </div>
+              
+              <!-- Additional connect option if not all types are connected -->
+              <button 
+                v-if="connectionToCurrentUser[1].connectionTypes.length < 2"
+                @click="handleConnect"
+                :disabled="isConnecting"
+                class="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-gray-300 rounded-lg transition-all text-xs font-medium border border-neutral-700"
+              >
+                + Add {{ connectionToCurrentUser[1].connectionTypes.includes('Friend') ? 'Following' : 'Friend' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -262,15 +256,15 @@ watch(() => route.params.id, () => {
            <div class="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
              <h3 class="font-bold text-gray-200 mb-4">About</h3>
              <p class="text-gray-400 text-sm">
-                Joined {{ new Date(user['created-at']?.timestamp || Date.now()).toLocaleDateString() }}
+                Joined {{ new Date(user.createdAt?.timestamp || Date.now()).toLocaleDateString() }}
              </p>
            </div>
            
-           <div v-if="user['connected-users'] && user['connected-users'].length > 0" class="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+           <div v-if="user.connectedUsers && user.connectedUsers.length > 0" class="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
              <h3 class="font-bold text-gray-200 mb-4">Connections</h3>
              <div class="space-y-3">
                 <div 
-                  v-for="conn in user['connected-users']" 
+                  v-for="conn in user.connectedUsers" 
                   :key="conn[0]" 
                   class="flex items-center justify-between group cursor-pointer hover:bg-neutral-800 p-2 rounded-lg transition relative"
                   @click="router.push(`/profile/${conn[0]}`)"
@@ -281,7 +275,7 @@ watch(() => route.params.id, () => {
                         </div>
                         <div class="min-w-0">
                              <p class="text-sm font-medium text-gray-200 truncate">{{ conn[0] }}</p>
-                             <p class="text-xs text-gray-500 capitalize truncate">{{ conn[1]['connection-types'].join(', ') }}</p>
+                             <p class="text-xs text-gray-500 capitalize truncate">{{ conn[1].connectionTypes.join(', ') }}</p>
                         </div>
                     </div>
 
@@ -314,7 +308,7 @@ watch(() => route.params.id, () => {
                             
                             <template v-if="isCurrentUser">
                                 <button 
-                                    v-for="type in conn[1]['connection-types']"
+                                    v-for="type in conn[1].connectionTypes"
                                     :key="type"
                                     @click="handleDisconnectUser(conn[0], type)"
                                     class="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500 hover:text-white transition flex items-center gap-2 border-t border-neutral-700"
@@ -345,7 +339,7 @@ watch(() => route.params.id, () => {
            </div>
            
            <div v-else class="space-y-6">
-             <PostCard v-for="post in posts" :key="post['post-id']" :post="post" />
+             <PostCard v-for="post in posts" :key="post.postId" :post="post" />
            </div>
         </div>
       </div>
